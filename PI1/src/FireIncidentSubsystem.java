@@ -61,42 +61,31 @@ public class FireIncidentSubsystem implements Runnable{
                 System.err.println("[" + threadName + "] error parsing event line '" + line + "': " + e.getMessage());
             }
         }
-        private void sendEventToScheduler(Event event) {
-                scheduler.sendEvent(event);
-            }
-            System.out.println("[" + threadName + "] Sent to Scheduler: " + event);
-        }
-        private void checkConfirmations() {
-            String confirmation = scheduler.getConfirmation();
-        }
-        }
         @Override
-    public void run(){
-        System.out.println("[" + threadName + "] Starting Fire Incident Subsystem");
-        loadEvents();
-        System.out.println("[" + threadName + "] Beginning event processing");
-        for(Event event:events){
-            sendEventToScheduler(event);
-            try{
-                Thread.sleep(1000);
-            }catch(InterruptedException e){
-                System.err.println("[" + threadName + "] Thread interrupted");
-                Thread.currentThread().interrupt();
-                break;
+        public void run() {
+            System.out.println("[" + threadName + "] Starting Fire Incident Subsystem");
+            loadEvents();
+            if (events.isEmpty()) {
+                System.err.println("[" + threadName + "] No events loaded. Terminating.");
+                return;
             }
-            checkConfirmations();
-        }
-        System.out.println("[" + threadName + "] All events sent. Waiting for final confirmations");
-        for (int i = 0; i < 5; i++) {
-            checkConfirmations();
-            try {
-                Thread.sleep(500);
-            }catch(InterruptedException e) {
-                System.err.println("[" + threadName + "] Thread interrupted");
-                Thread.currentThread().interrupt();
-                break;
+            System.out.println("[" + threadName + "] Beginning event processing");
+            for (Event event : events) {
+                System.out.println("[" + threadName + "] Sending to Scheduler: " + event);
+                scheduler.sendEvent(event);
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    System.err.println("[" + threadName + "] Thread interrupted");
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                System.out.println("[" + threadName + "] Waiting for confirmation...");
+                String confirmation = scheduler.getConfirmation();
+                System.out.println("[" + threadName + "] ✓ " + confirmation);
             }
+
+            System.out.println("[" + threadName + "] All events processed");
+            System.out.println("[" + threadName + "] Fire Incident Subsystem terminating");
         }
-        System.out.println("[" + threadName + "] Fire Incident Subsystem terminating");
-    }
 }

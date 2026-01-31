@@ -5,9 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ae902544-ff80-4f24-afd9-b007062348b9" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/PI1/src/Event.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/Event.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemGUI.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemJUnitTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystem.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystem.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemTest.java" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
