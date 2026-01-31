@@ -7,9 +7,9 @@ public class Event implements Serializable {
     }
     public enum Severity{
         //L of water/foam needed
-        Low(10),
-        Moderate(20),
-        High(30);
+        LOW(10),
+        MODERATE(20),
+        HIGH(30);
         private final int waterRequired;
         Severity(int waterRequired){
             this.waterRequired = waterRequired;
