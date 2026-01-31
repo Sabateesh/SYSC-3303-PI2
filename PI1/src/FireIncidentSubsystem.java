@@ -6,20 +6,15 @@ import java.util.List;
 import java.util.Queue;
 
 public class FireIncidentSubsystem implements Runnable{
-    private final Queue<Event> outgoing;
-    private final Queue<String> incoming;
-
+    private final Scheduler scheduler;
     private final List<Event> events;
     private final String eventpath;
     private final String threadName;
 
     //constr for fireincidentsubsystem
-    public FireIncidentSubsystem(String eventpath,
-                                 Queue<Event> outgoing,
-                                 Queue<String> incoming) {
+    public FireIncidentSubsystem(String eventpath, Scheduler scheduler){
         this.eventpath = eventpath;
-        this.outgoing = outgoing;
-        this.incoming = incoming;
+        this.scheduler = scheduler;
         this.events = new ArrayList<>();
         this.threadName = "FireIncidentSubsystem";
     }
@@ -67,19 +62,13 @@ public class FireIncidentSubsystem implements Runnable{
             }
         }
         private void sendEventToScheduler(Event event) {
-            synchronized (outgoing) {
-                outgoing.offer(event);
-                outgoing.notifyAll();
+                scheduler.sendEvent(event);
             }
             System.out.println("[" + threadName + "] Sent to Scheduler: " + event);
         }
         private void checkConfirmations() {
-            synchronized (incoming) {
-                while (!incoming.isEmpty()) {
-                    String message = incoming.poll();
-                    System.out.println("[" + threadName + "] Received confirmation: " + message);
-                }
-            }
+            String confirmation = scheduler.getConfirmation();
+        }
         }
         @Override
     public void run(){
