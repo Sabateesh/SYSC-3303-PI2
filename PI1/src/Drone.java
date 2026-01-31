@@ -1,29 +1,24 @@
+public class Drone implements Runnable {
 
+    private final Event event;
+    private final SchedulerServer scheduler;
 
-public class Drone {
-    private boolean in_use;
-    private int waterReservoir;
-    private double x_coordinate;
-    private double y_coordinate;
-    private int fireID;
-
-    public Drone(){
-        in_use = true;
-        waterReservoir = 15;
-        x_coordinate = 0.0;
-        y_coordinate = 0.0;
+    public Drone(Event event, SchedulerServer scheduler) {
+        this.event = event;
+        this.scheduler = scheduler;
     }
 
-    public void moveDestination(int x_destionation, int y_destination){
-        x_coordinate = x_destionation;
-        y_coordinate = y_destination;
-    }
+    @Override
+    public void run() {
+        System.out.println("[Drone] Servicing fire at zone " + event.getZoneID());
 
-    public boolean enoughWaterLeft(int waterNeeded){
-        return waterReservoir >= waterNeeded;
-    }
+        try {
+            Thread.sleep(2000); //place holder for drone time calculation later
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
 
-    public void assignDrone(int fireID){
-        this.fireID = fireID;
+        scheduler.reportDone(event);
+        System.out.println("[Drone] Completed fire at zone " + event.getZoneID());
     }
 }

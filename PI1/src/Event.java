@@ -23,13 +23,15 @@ public class Event implements Serializable {
     private final int zoneID;
     private final EventType eventType;
     private final Severity severity;
+    private final int fireID;
 
     //event constr
-    public Event(String time, int zoneID, EventType eventType, Severity severity){
+    public Event(String time, int zoneID, EventType eventType, Severity severity, int fireID){
         this.time = time;
         this.zoneID = zoneID;
         this.eventType = eventType;
         this.severity = severity;
+        this.fireID = fireID;
     }
 
     //getters
@@ -48,6 +50,8 @@ public class Event implements Serializable {
     public int getWaterRequired(){
         return severity.getWaterRequired();
     }
+    public int getFireID() {return fireID;}
+
     //parse an eventtype from a string
     public static EventType parseEventType(String typeString){
         try{

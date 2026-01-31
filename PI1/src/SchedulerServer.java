@@ -8,6 +8,7 @@ public class SchedulerServer implements Runnable {
     public SchedulerServer(Queue<Event> fromFire, Queue<String> toFire) {
         this.fromFire = fromFire;
         this.toFire = toFire;
+
     }
 
     public boolean isEmpty() {
