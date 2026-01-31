@@ -10,10 +10,10 @@ public class DroneSubsystem {
     public DroneSubsystem(Scheduler scheduler){
         drones = new ArrayList<>();
         workToDo = false;
-        scheduler = scheduler
+        scheduler = scheduler;
     }
 
-    public synchronized void checkForWork(){
+    public synchronized boolean checkForWork(){
         return scheduler.isEmpty();
     }
 }

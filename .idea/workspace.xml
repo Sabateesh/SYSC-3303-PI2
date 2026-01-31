@@ -5,11 +5,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ae902544-ff80-4f24-afd9-b007062348b9" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemGUI.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemJUnitTest.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PI1/src/DroneSubsystem.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/DroneSubsystem.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystem.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystem.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemTest.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemGUI.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemGUI.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemJUnitTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/FireIncidentSubsystemJUnitTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PI1/src/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/Main.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PI1/src/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PI1/src/SchedulerServer.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/SchedulerServer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PI1/src/Shedular.java" beforeDir="false" afterPath="$PROJECT_DIR$/PI1/src/Shedular.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Project.iml" beforeDir="false" afterPath="$PROJECT_DIR$/Project.iml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -19,10 +24,10 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "customColor": "",
-  "associatedIndex": 2
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 2
+}</component>
   <component name="ProjectId" id="392BOU6GrDGif0O7lNBA5StyaUU" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -30,9 +35,17 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Application.FireIncidentSubsystemGUI.executor": "Run",
+    "Downloaded.Files.Path.Enabled": "true",
+    "JUnit.FireIncidentSubsystemJUnitTest.executor": "Run",
+    "JUnit.FireIncidentSubsystemJUnitTest.loadEvents_parsesCsv_andBuildsEventsList.executor": "Run",
+    "JUnit.FireIncidentSubsystemJUnitTest.run_sendsEvents_andReceivesConfirmations_roundTrip.executor": "Run",
+    "Repository.Attach.Annotations": "false",
+    "Repository.Attach.JavaDocs": "false",
+    "Repository.Attach.Sources": "false",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "#issue2-fireincidentsubsystem",
+    "git-widget-placeholder": "main",
     "kotlin-language-version-configured": "true"
   }
 }]]></component>
@@ -40,6 +53,44 @@
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/PI1/src" />
     </key>
+  </component>
+  <component name="RunManager">
+    <configuration name="FireIncidentSubsystemJUnitTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="Project" />
+      <option name="PACKAGE_NAME" value="" />
+      <option name="MAIN_CLASS_NAME" value="FireIncidentSubsystemJUnitTest" />
+      <option name="TEST_OBJECT" value="class" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="FireIncidentSubsystemJUnitTest.loadEvents_parsesCsv_andBuildsEventsList" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="Project" />
+      <option name="PACKAGE_NAME" value="" />
+      <option name="MAIN_CLASS_NAME" value="FireIncidentSubsystemJUnitTest" />
+      <option name="METHOD_NAME" value="loadEvents_parsesCsv_andBuildsEventsList" />
+      <option name="TEST_OBJECT" value="method" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="FireIncidentSubsystemJUnitTest.run_sendsEvents_andReceivesConfirmations_roundTrip" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="Project" />
+      <option name="PACKAGE_NAME" value="" />
+      <option name="MAIN_CLASS_NAME" value="FireIncidentSubsystemJUnitTest" />
+      <option name="METHOD_NAME" value="run_sendsEvents_andReceivesConfirmations_roundTrip" />
+      <option name="TEST_OBJECT" value="method" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="JUnit.FireIncidentSubsystemJUnitTest" />
+        <item itemvalue="JUnit.FireIncidentSubsystemJUnitTest.run_sendsEvents_andReceivesConfirmations_roundTrip" />
+        <item itemvalue="JUnit.FireIncidentSubsystemJUnitTest.loadEvents_parsesCsv_andBuildsEventsList" />
+      </list>
+    </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
@@ -57,5 +108,20 @@
       <updated>1769884253170</updated>
     </task>
     <servers />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="java-method">
+          <url>file://$PROJECT_DIR$/PI1/src/FireIncidentSubsystemJUnitTest.java</url>
+          <line>19</line>
+          <properties class="FireIncidentSubsystemJUnitTest" method="loadEvents_parsesCsv_andBuildsEventsList">
+            <option name="EMULATED" value="true" />
+            <option name="WATCH_EXIT" value="false" />
+          </properties>
+          <option name="timeStamp" value="2" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>
