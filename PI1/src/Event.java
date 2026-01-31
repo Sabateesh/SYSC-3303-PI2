@@ -1,6 +1,5 @@
-import java.io.Serializable;
 
-public class Event implements Serializable {
+public class Event {
     public enum EventType {
         FIRE_DETECTED,
         DRONE_REQUEST
