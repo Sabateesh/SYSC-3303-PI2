@@ -16,5 +16,15 @@ public class Main {
         schedulerThread.start();
         droneThread.start();
         fireThread.start();
+        try {
+            fireThread.join();
+            Thread.sleep(5000);
+            schedulerThread.interrupt();
+            droneThread.interrupt();
+            schedulerThread.join();
+            droneThread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
