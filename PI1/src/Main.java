@@ -4,7 +4,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 public class Main {
     public static void main(String[] args) {
-        String eventPath = "Sample_event_file.csv";
+        String eventPath = "PI1/Sample_event_file.csv";
         Queue<Event> fromFire = new LinkedList<>();
         Queue<String> toFire = new LinkedList<>();
         Scheduler scheduler = new Scheduler(fromFire, toFire);
