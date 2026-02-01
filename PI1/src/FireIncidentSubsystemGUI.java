@@ -102,7 +102,6 @@ public class FireIncidentSubsystemGUI extends JFrame {
             }
             g2.setColor(Color.DARK_GRAY);
             g2.setFont(getFont().deriveFont(Font.PLAIN, 12f));
-            g2.drawString("PI1 placeholder: zones are hardcoded; later read from zone CSV.", 10, getHeight() - 12);
             g2.dispose();
         }
     }

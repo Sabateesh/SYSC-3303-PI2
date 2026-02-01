@@ -33,11 +33,24 @@ public class SchedulerServer implements Runnable {
             toFire.notifyAll();
         }
     }
-
+    public void sendEvent(Event e){
+        if (e == null) return;
+        synchronized (fromFire) {
+            fromFire.offer(e);
+            fromFire.notifyAll();
+        }
+    }
+    public String getConfirmation() throws InterruptedException {
+        synchronized (toFire) {
+            while (toFire.isEmpty()) {
+                toFire.wait();
+            }
+            return toFire.poll();
+        }
+    }
     @Override
     public void run() {
         System.out.println("[Scheduler] Scheduler thread started (PI1 queue mode)");
-
         while (true) {
             try {
                 Event e = requestTask(); // blocks

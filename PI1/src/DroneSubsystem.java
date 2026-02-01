@@ -20,10 +20,12 @@ public class DroneSubsystem implements Runnable {
         while (running) {
             try {
                 System.out.println("[DroneSubsystem] Waiting for task...");
-                Event task = scheduler.requestTask();
+                Event task = scheduler.requestTask(); // blocks until work
 
                 Drone drone = new Drone(task, scheduler);
-                Thread droneThread = new Thread(drone, "Drone-" + task.getZoneID());
+                Thread droneThread =
+                        new Thread(drone, "Drone-" + task.getZoneID());
+
                 drones.add(droneThread);
                 droneThread.start();
 
