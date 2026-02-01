@@ -3,6 +3,7 @@
 - `README.md` (contains info and instructions)
 - `Sample_event_file.csv` (contains sample events)
 - `P1ClassDiagram.png` (UML class diagram)
+- `P1SequenceDiagram.png` (UML class diagram)
 - `src/Main.java` (main program)
 - `src/Drone.java` (represents a single drone which is assigned an event)
 - `src/DroneSubsystem.java` (the drone subsystem with multiple drones and which assigned tasks to drones)
