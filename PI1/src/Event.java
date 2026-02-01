@@ -31,6 +31,9 @@ public class Event implements Serializable {
         this.eventType = eventType;
         this.severity = severity;
     }
+    public Event(String time, int zoneID, EventType eventType, Severity severity) {
+        this(time, zoneID, eventType, severity, 0);
+    }
 
     //getters
     public String getTime(){

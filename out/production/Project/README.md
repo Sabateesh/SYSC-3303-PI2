@@ -2,6 +2,7 @@
 Overview
 -
 
+<<<<<<< HEAD
 Included Files
 - `src/Main.java` (main program)
 - `src/Drone.java` (represents a single drone which is assigned an event)
@@ -14,6 +15,8 @@ Included Files
 - `src/Scheduler.java`
 - `src/SchedulerServer.java`
 
+=======
+>>>>>>> 49a0166a20b3c6887d7c56eda685771c2235b8b9
 What’s Implemented
 -
 FireIncidentSubsystem.java-Sabateesh
