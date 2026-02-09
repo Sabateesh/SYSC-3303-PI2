@@ -62,8 +62,8 @@ public class DroneSubsystem implements Runnable {
             }
         }
 
-        for (int i=0; i<drones.size(); i++) {
-            //TODO: set all drones "running" to false
+        for (Thread drone : drones) {
+            drone.interrupt();
         }
         System.out.println("[DroneSubsystem] Drone subsystem ended");
     }
