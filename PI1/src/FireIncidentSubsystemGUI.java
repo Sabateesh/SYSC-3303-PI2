@@ -1,31 +1,122 @@
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-//GUI Scaffold
+//PI2 - dynamic GUI
+// - 
 public class FireIncidentSubsystemGUI extends JFrame {
+     //drone states
+        public enum DroneState{
+            IDLE("Idle", new Color(100,180,100)),
+            InRoute("In Route", new Color(60,130,220)),
+            DroppingAgent("Dropping Agent", new Color(220,140,40)),
+            Returning("Returning", new Color(160,100,200)),
+            Refilling("Refilling", new Color(80,180,180));
+            private final String label;
+            private final Color color;
+            DroneState(String lable, Color color){
+                this.label = lable;
+                this.color = color;
+            }
+            public String getLabel(){return label;}
+            public Color getColor(){return color;}
+        }
+        //fire status for zones
+        public enum FireStatus{
+            None, Active, Extinguished
+        }
+        //data models
+        private final DefaultTableModel droneTableModel;
+        private final DefaultTableModel eventTableModel;
+        //zone map state
+        private final List<ZoneRect> zones;
+        private final Map<Integer,FireStatus> zoneFireStatus;
+        private final Map<Integer,String> zoneSeverity;
+        private final ZonesPanel zonesPanel;
+        //drone tracking on map
+        private final Map<String,DroneMarker> droneMarkers;
+        //summery labels
+        private final JLabel activeFiresLabel;
+        private final JLabel droneSummeryLabel;
+        private final JLabel statusLabel;
+
     public FireIncidentSubsystemGUI() {
-        super("PI1 - Fire Incident System GUI (Scaffold)");
+        super("PI2 - FFirefighting Drone Swarm");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1000, 650);
+        setSize(1100, 700);
         setLocationRelativeTo(null);
-        setLayout(new BorderLayout(10, 10));
-        ZonesPanel zonesPanel = new ZonesPanel(sampleZones());
-        zonesPanel.setBorder(new TitledBorder("Zones (Placeholder)"));
-        JPanel rightPanel = new JPanel(new GridLayout(2, 1, 10, 10));
-        JPanel dronesPanel = buildDronesPanel();
-        dronesPanel.setBorder(new TitledBorder("Drones (Placeholder)"));
-        JPanel eventsPanel = buildEventsPanel();
-        eventsPanel.setBorder(new TitledBorder("Events (Placeholder)"));
-        rightPanel.add(dronesPanel);
-        rightPanel.add(eventsPanel);
+        setLayout(new BorderLayout(8, 8));
+
+        //init state maps
+        zoneFireStatus = new HashMap<>();
+        zoneSeverity = new HashMap<>();
+        droneMarkers = new HashMap<>();
+
+        //zones panel
+        zones = loadZones();
+        zonesPanel = new ZonesPanel(zones, zoneFireStatus, zoneSeverity, droneMarkers);
+        zonesPanel.setBorder(new TitledBorder("Zone Map"));
+
+        JPanel rightpPanel = new JPanel(new GridLayout(2,1,8,8));
+        
+        //drone table
+        String[] droneCols = {"Drone", "State", "Water (L)", "Zone"};
+        droneTableModel = new DefaultTableModel(droneCols, 0){
+            @Override
+            public boolean isCellEditable(int row, int col){
+                return false;
+            }
+        };
+        JTable droneTable = new JTable(droneTableModel);
+        droneTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN,12));
+        droneTable.setRowHeight(22);
+        droneTable.getColumnModel().getColumn(1).setCellRenderer(new DroneStateCellRenderer());
+        JPanel dronesPanel = new JPanel(new BorderLayout(6, 6));
+        dronesPanel.setBorder(new TitledBorder("Drones"));
+        dronesPanel.add(new JScrollPane(droneTable), BorderLayout.CENTER);
+
+        //lenged for drone states
+        JPanel legendPanel = buildDronesLegend();
+        dronesPanel.add(legendPanel, BorderLayout.SOUTH);
+
+        //events table
+        String[] eventCols = {"Time", "Zones", "Type", "Severity", "Status"};
+        eventTableModel = new DefaultTableModel(eventCols, 0){
+            @Override
+            public boolean isCellEditable(int row, int col){
+                return false;
+            }
+        };
+        JTable evenTable = new JTable(eventTableModel);
+        eventTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        eventTable.setRowHeight(20);
+        eventTable.getColumnModel().getColumn(4).setCellRenderer(new EventStatusCellRenderer());
+        JPanel eventsPanel = new JPanel(new BorderLayout(6, 6));
+        eventsPanel.setBorder(new TitledBorder("Fire Incidents"));
+        eventsPanel.add(new JScrollPane(eventTable), BorderLayout.CENTER);
+        
+        rightpPanel.add(dronesPanel);
+        rightpPanel.add(eventsPanel);
+        rightpPanel.setPreferredSize(new Dimension(420,0));
+
         add(zonesPanel, BorderLayout.CENTER);
-        add(rightPanel, BorderLayout.EAST);
-        JLabel status = new JLabel("Status: GUI Scaffold (static) — not connected to CSV/threads in PI1");
-        status.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
-        add(status, BorderLayout.SOUTH);
+        add(rightpPanel, BorderLayout.EAST);
+
+        //top summery bar
+        
+
+
+
+
+
+
+
     }
     //hardcoded zones for PI1
     private static List<ZoneRect> sampleZones() {
