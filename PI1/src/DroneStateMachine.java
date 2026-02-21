@@ -1,10 +1,7 @@
-import java.net.DatagramSocket;
-
-
 enum DroneEvent{
     fireAssigned,
     arrivedToFire,
-    needMoreWater,
+    needRefill,
     jobFinished,
     arrivedToOrigin,
     error
@@ -14,17 +11,15 @@ enum DroneState{
     idle,
     enRoute,
     droppingAgent,
-    refilling,
+    returnForRefill,
     returnOrigin
 }
 
 class DroneContext{
     final String droneName;
-    final DatagramSocket socket;
 
-    DroneContext(String droneName, DatagramSocket socket){
+    DroneContext(String droneName){
         this.droneName = droneName;
-        this.socket = socket;
     }
 
     void log(String msg){
@@ -35,8 +30,8 @@ public class DroneStateMachine {
     private DroneState state = DroneState.idle;
     private final DroneContext ctx;
 
-    public DroneStateMachine(DroneContext ctx){
-        this.ctx = ctx;
+    public DroneStateMachine(String droneName){
+        this.ctx = new DroneContext(droneName);
     }
 
     public synchronized DroneState getState(){
@@ -48,7 +43,7 @@ public class DroneStateMachine {
         state = next;
     }
 
-    public synchronized void handleEvent(DroneEvent ev, String payload){
+    public synchronized void handleEvent(DroneEvent ev){
         switch(state){
             case idle:
                 if (ev == DroneEvent.fireAssigned){
@@ -62,7 +57,7 @@ public class DroneStateMachine {
                 if (ev == DroneEvent.arrivedToFire) {
                     transitionTo(DroneState.droppingAgent, ev);
                 }
-                else if (ev == DroneEvent.jobFinished){
+                else if (ev == DroneEvent.jobFinished){ //not used?
                     transitionTo(DroneState.returnOrigin, ev);
                 }
                 else{
@@ -71,8 +66,8 @@ public class DroneStateMachine {
                 break;
 
             case droppingAgent:
-                if (ev == DroneEvent.needMoreWater){
-                    transitionTo(DroneState.returnOrigin, ev);
+                if (ev == DroneEvent.needRefill){
+                    transitionTo(DroneState.returnForRefill, ev);
                 }
                 else if (ev == DroneEvent.jobFinished){
                     transitionTo(DroneState.returnOrigin, ev);
@@ -82,12 +77,9 @@ public class DroneStateMachine {
                 }
                 break;
 
-            case refilling:
+            case returnForRefill:
                 if (ev == DroneEvent.fireAssigned){
                     transitionTo(DroneState.enRoute, ev);
-                }
-                else if (ev == DroneEvent.jobFinished){
-                    transitionTo(DroneState.idle, ev);
                 }
                 else{
                     ctx.log("[FSM] Ignored " + ev + " (state=Refilling)");
