@@ -4,8 +4,8 @@ public class Drone implements Runnable {
     public static final float BATTERY_SIZE = 50; //battery size in minutes
 
     private Event event;
-    private boolean busy = false;
     private boolean running = true;
+    private DroneStateMachine stateMachine;
     private float waterRemaining;
     private float batteryRemaining;
 
@@ -16,12 +16,10 @@ public class Drone implements Runnable {
         this.droneSubsystem = droneSubsystem;
         this.event = null;
         this.droneName = droneName;
+        this.stateMachine = new DroneStateMachine(droneName);
+
         this.waterRemaining = TANK_SIZE;
         this.batteryRemaining = BATTERY_SIZE;
-    }
-
-    public boolean isBusy() {
-        return this.busy;
     }
 
     public float getWaterRemaining() {
@@ -36,25 +34,26 @@ public class Drone implements Runnable {
         else
             waterRemaining -= waterVolume;
     }
+    public void setDroneFull() {
+        waterRemaining = TANK_SIZE;
+        batteryRemaining = BATTERY_SIZE;
+    }
 
     @Override
     public void run() {
         while(running) {
             try {
-                if(isTankEmpty()) {
-                    System.out.println("[" + droneName + "] Refilling tank");
-
-                    // TODO: TRAVEL TO ORIGIN TO REFILL TANK
-                    Thread.sleep(2000);
-
-                    System.out.println("[" + droneName + "] Tank full");
-                    waterRemaining = TANK_SIZE;
-                    batteryRemaining = BATTERY_SIZE;
-
-                } else {
-                    if (isBusy()) { //the drone has a fire to address
-                        // TODO: TRAVEL TO ZONE
-
+                switch(stateMachine.getState()) {
+                    case DroneState.idle:
+                        event = droneSubsystem.requestTask(); // blocks until work
+                        stateMachine.handleEvent(DroneEvent.fireAssigned);
+                        break;
+                    case DroneState.enRoute:
+                        System.out.println("[" + droneName + "] Enroute to zone " + event.getZoneID());
+                        // TODO: CALCULATE TIME TRAVEL TO ZONE
+                        stateMachine.handleEvent(DroneEvent.arrivedToFire);
+                        break;
+                    case DroneState.droppingAgent: //TODO: ONLY EMPTY UNTIL BATTERY HAS JUST ENOUGH
                         System.out.println("[" + droneName + "] Servicing fire at zone " + event.getZoneID());
 
                         float emptyAmount = event.getWaterLeft();
@@ -65,19 +64,34 @@ public class Drone implements Runnable {
 
                         useUpWater(emptyAmount);
                         event.useWater(emptyAmount);
-                        System.out.println("[" + droneName + "] Emptied " + emptyAmount + " L of water");
 
                         if(event.isFireOut()) {
                             droneSubsystem.reportDone(event);
                             System.out.println("[" + droneName + "] Completed fire at zone " + event.getZoneID());
                             this.event = null;
-                            this.busy = false;
+                            stateMachine.handleEvent(DroneEvent.jobFinished);
+                        } else {
+                            System.out.println("[" + droneName + "] Emptied " + emptyAmount + " L of water, going for refill");
+                            stateMachine.handleEvent(DroneEvent.needRefill);
                         }
-                    } else { //the drone is waiting for a new fire
-                        System.out.println("[" + droneName + "] Waiting for task...");
-                        event = droneSubsystem.requestTask(); // blocks until work
-                        this.busy = true;
-                    }
+
+                        break;
+                    case DroneState.returnForRefill:
+                        Thread.sleep(2000); // TODO: CALCULATE TIME TRAVEL TO ORIGIN
+
+                        setDroneFull();
+                        stateMachine.handleEvent(DroneEvent.fireAssigned);
+                        break;
+                    case DroneState.returnOrigin:
+                        Thread.sleep(2000); // TODO: CALCULATE TIME TRAVEL TO ORIGIN
+
+                        setDroneFull();
+                        stateMachine.handleEvent(DroneEvent.arrivedToOrigin);
+                        break;
+                    default:
+                        System.out.println("[" + droneName + "] Unknown state");
+                        Thread.currentThread().interrupt();
+                        break;
                 }
             } catch (InterruptedException e) {
                 System.out.println("[" + droneName + "] Interrupted, shutting down");
