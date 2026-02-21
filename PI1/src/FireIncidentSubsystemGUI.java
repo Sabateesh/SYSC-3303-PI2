@@ -2,49 +2,81 @@ import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableCellRenderer;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-
 //GUI Scaffold
 public class FireIncidentSubsystemGUI extends JFrame {
-         //drone states
-        public enum DroneState{
-            IDLE("Idle", new Color(100,180,100)),
-            InRoute("In Route", new Color(60,130,220)),
-            DroppingAgent("Dropping Agent", new Color(220,140,40)),
-            Returning("Returning", new Color(160,100,200)),
-            Refilling("Refilling", new Color(80,180,180));
-            private final String label;
-            private final Color color;
-            DroneState(String lable, Color color){
-                this.label = lable;
-                this.color = color;
+     //drone states
+    public enum DroneState{
+        IDLE("Idle", new Color(100,180,100)),
+        InRoute("In Route", new Color(60,130,220)),
+        DroppingAgent("Dropping Agent", new Color(220,140,40)),
+        Returning("Returning", new Color(160,100,200)),
+        Refilling("Refilling", new Color(80,180,180));
+        private final String label;
+        private final Color color;
+        DroneState(String lable, Color color){
+            this.label = lable;
+            this.color = color;
+        }
+        public String getLabel(){return label;}
+        public Color getColor(){return color;}
+    }
+    //fire status for zones
+    public enum FireStatus{
+        None, Active, Extinguished
+    }
+    //data models
+    private final DefaultTableModel droneTableModel;
+    private final DefaultTableModel eventTableModel;
+    //zone map state
+    private final List<ZoneRect> zones;
+    private final Map<Integer,FireStatus> zoneFireStatus;
+    private final Map<Integer,String> zoneSeverity;
+    private final ZonesPanel zonesPanel;
+    //drone tracking on map
+    private final Map<String,DroneMarker> droneMarkers;
+    //summery labels
+    private final JLabel activeFiresLabel;
+    private final JLabel droneSummeryLabel;
+    private final JLabel statusLabel;
+
+    //a table cell renderer that displays a JProgressBar
+    private static class ProgressCellRenderer extends JProgressBar implements TableCellRenderer {
+        public static final int precision = 10;
+
+        ProgressCellRenderer() {
+            super();
+            super.setMaximum((int)(Drone.TANK_SIZE*precision));
+            setStringPainted(true);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            String currentVal = String.format("%.1f", ((float)getValue()/(float)precision));
+            String maxVal = String.format("%.1f", Drone.TANK_SIZE);
+            setString(currentVal+"/"+maxVal);
+
+            super.paintComponent(g);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            int progress = 0;
+            if (value instanceof Float) {
+                progress = Math.round(((Float) value) * 100f);
+            } else if (value instanceof Integer) {
+                progress = (int) value;
             }
-            public String getLabel(){return label;}
-            public Color getColor(){return color;}
+            setValue(progress);
+            return this;
         }
-        //fire status for zones
-        public enum FireStatus{
-            None, Active, Extinguished
-        }
-        //data models
-        private final DefaultTableModel droneTableModel;
-        private final DefaultTableModel eventTableModel;
-        //zone map state
-        private final List<ZoneRect> zones;
-        private final Map<Integer,FireStatus> zoneFireStatus;
-        private final Map<Integer,String> zoneSeverity;
-        private final ZonesPanel zonesPanel;
-        //drone tracking on map
-        private final Map<String,DroneMarker> droneMarkers;
-        //summery labels
-        private final JLabel activeFiresLabel;
-        private final JLabel droneSummeryLabel;
-        private final JLabel statusLabel;
+    }
         
     public FireIncidentSubsystemGUI() {
         super("PI2 - Firefighting Drone Swarm");
@@ -77,6 +109,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         droneTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN,12));
         droneTable.setRowHeight(22);
         droneTable.getColumnModel().getColumn(1).setCellRenderer(new DroneStateCellRenderer());
+        droneTable.getColumnModel().getColumn(2).setCellRenderer(new ProgressCellRenderer()); //TODO
         JPanel dronesPanel = new JPanel(new BorderLayout(6, 6));
         dronesPanel.setBorder(new TitledBorder("Drones"));
         dronesPanel.add(new JScrollPane(droneTable), BorderLayout.CENTER);
@@ -129,12 +162,12 @@ public class FireIncidentSubsystemGUI extends JFrame {
     }
 
     //register a drone so it appears in the table
-    public void registerDrone(String droneName, double waterCapacity){
+    public void registerDrone(String droneName, float waterCapacity){
         SwingUtilities.invokeLater(() -> {
             droneTableModel.addRow(new Object[]{
                 droneName,
                 DroneState.IDLE.getLabel(),
-                String.format("%.1f", waterCapacity),
+                (int)(waterCapacity*ProgressCellRenderer.precision),
                 "Base"
             });
             droneMarkers.put(droneName, new DroneMarker(droneName,-1,DroneState.IDLE));
@@ -142,12 +175,12 @@ public class FireIncidentSubsystemGUI extends JFrame {
         });
     }
     //update drones state, watr lvl and assigned zone
-    public void updateDroneState(String droneName, DroneState state, double waterLevel, int zoneId){
+    public void updateDroneState(String droneName, DroneState state, float waterLevel, int zoneId){
         SwingUtilities.invokeLater(() -> {
             for(int r = 0; r < droneTableModel.getRowCount(); r++){
                 if(droneName.equals(droneTableModel.getValueAt(r, 0))){
                     droneTableModel.setValueAt(state.getLabel(), r, 1);
-                    droneTableModel.setValueAt(String.format("%.1f", waterLevel), r, 2);
+                    droneTableModel.setValueAt((int)(waterLevel*ProgressCellRenderer.precision), r, 2);
                     droneTableModel.setValueAt(zoneId > 0 ? "Zone " + zoneId : "Base", r, 3);
                     break;
                 }
