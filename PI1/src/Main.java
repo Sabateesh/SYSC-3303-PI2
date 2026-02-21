@@ -13,8 +13,8 @@ public class Main {
         FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI();
         SwingUtilities.invokeLater(() -> gui.setVisible(true));
 
-        //drone 1
-        gui.registerDrone("Drone-1", Drone.TANK_SIZE);
+        //drone 0
+        gui.registerDrone("Drone-0", Drone.TANK_SIZE);
         fire.loadEvents();
         for(Event event: fire.getEvents()) {
             gui.addEvent(
