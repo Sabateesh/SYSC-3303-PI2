@@ -63,6 +63,9 @@ public class FireIncidentSubsystem implements Runnable {
             System.err.println("[" + threadName + "] error parsing event line '" + line + "': " + e.getMessage());
         }
     }
+    public List<Event> getEvents() {
+        return events;
+    }
 
     @Override
     public void run() {
