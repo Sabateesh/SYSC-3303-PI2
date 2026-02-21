@@ -45,38 +45,6 @@ public class FireIncidentSubsystemGUI extends JFrame {
     private final JLabel activeFiresLabel;
     private final JLabel droneSummeryLabel;
     private final JLabel statusLabel;
-
-    //a table cell renderer that displays a JProgressBar
-    private static class ProgressCellRenderer extends JProgressBar implements TableCellRenderer {
-        public static final int precision = 10;
-
-        ProgressCellRenderer() {
-            super();
-            super.setMaximum((int)(Drone.TANK_SIZE*precision));
-            setStringPainted(true);
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            String currentVal = String.format("%.1f", ((float)getValue()/(float)precision));
-            String maxVal = String.format("%.1f", Drone.TANK_SIZE);
-            setString(currentVal+"/"+maxVal);
-
-            super.paintComponent(g);
-        }
-
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-            int progress = 0;
-            if (value instanceof Float) {
-                progress = Math.round(((Float) value) * 100f);
-            } else if (value instanceof Integer) {
-                progress = (int) value;
-            }
-            setValue(progress);
-            return this;
-        }
-    }
         
     public FireIncidentSubsystemGUI() {
         super("PI2 - Firefighting Drone Swarm");
@@ -441,7 +409,7 @@ public int addEvent(String time, int zoneId, String eventType, String severity) 
         }
     }
     //cell renderer for event state column
-   static class EventStatusCellRenderer extends DefaultTableCellRenderer {
+    static class EventStatusCellRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int col) {
@@ -462,6 +430,38 @@ public int addEvent(String time, int zoneId, String eventType, String severity) 
                 setFont(getFont().deriveFont(Font.BOLD));
             }
             return c;
+        }
+    }
+
+    //a table cell renderer that displays a JProgressBar
+    static class ProgressCellRenderer extends JProgressBar implements TableCellRenderer {
+        public static final int precision = 10;
+
+        ProgressCellRenderer() {
+            super();
+            super.setMaximum((int)(Drone.TANK_SIZE*precision));
+            setStringPainted(true);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            String currentVal = String.format("%.1f", ((float)getValue()/(float)precision));
+            String maxVal = String.format("%.1f", Drone.TANK_SIZE);
+            setString(currentVal+"/"+maxVal);
+
+            super.paintComponent(g);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            int progress = 0;
+            if (value instanceof Float) {
+                progress = Math.round(((Float) value) * 100f);
+            } else if (value instanceof Integer) {
+                progress = (int) value;
+            }
+            setValue(progress);
+            return this;
         }
     }
 
