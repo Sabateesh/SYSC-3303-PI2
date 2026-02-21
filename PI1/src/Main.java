@@ -16,7 +16,7 @@ public class Main {
         SwingUtilities.invokeLater(() -> gui.setVisible(true));
 
         //drone 1
-        gui.registerDrone("Drone-1", Drone.);
+        gui.registerDrone("Drone-1", Drone.TANK_SIZE);
         fire.loadEvents();
         for(Event event: fire.getEvents()) {
             gui.addEvent(
