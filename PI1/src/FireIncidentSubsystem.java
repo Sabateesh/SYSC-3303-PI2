@@ -78,7 +78,7 @@ public class FireIncidentSubsystem implements Runnable {
             if (parts.length > 3){
                 millis = Integer.parseInt(parts[3]);
             }
-            return ((hours * 3600L) + (min * 60L) + sec) * 1000L + millis;
+            return ((hours * 3600L) + (min * 60L) + sec) + (millis/1000);
         } catch(Exception e){
             System.err.println("[" + threadName + "] error parsing time: " + time);
             return 0;
@@ -105,8 +105,8 @@ public class FireIncidentSubsystem implements Runnable {
             //wait for the delay
             if(delay > 0){
                 try{
-                    System.out.println("[" + threadName + "] waiting " + (delay / 1000) + "s until next event...");
-                    Thread.sleep(delay/60);
+                    System.out.println("[" + threadName + "] waiting " + delay + "s until next event...");
+                    Thread.sleep(delay*SchedulerServer.simulationSpeed);
                 } catch ( InterruptedException e){
                     System.out.println("[" + threadName + "] interrupted while waiting");
                     Thread.currentThread().interrupt();

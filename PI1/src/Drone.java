@@ -4,7 +4,7 @@ public class Drone implements Runnable {
     public static final float DROP_RATE = 2; //drop rate of water
     public static final float TANK_SIZE = 15; //tank size in liters
     public static final float BATTERY_SIZE = 50; //battery size in minutes
-    public static final float DRONE_SPEED = 200; //drone speed in units per minute
+    public static final float DRONE_SPEED = 2*60; //drone speed in units per minute
 
     private Event event;
     private boolean running = true;
@@ -55,13 +55,13 @@ public class Drone implements Runnable {
         waterRemaining = TANK_SIZE;
         batteryRemaining = BATTERY_SIZE;
     }
-    public static int timeBetweenZones(Zone z1, Zone z2) {
-        return (int)((Zone.getDistance(z1, z2) * 1000) / DRONE_SPEED);
+    public static float timeBetweenZones(Zone z1, Zone z2) {
+        return (Zone.getDistance(z1, z2) / DRONE_SPEED);
     }
-    public static int timeToOrigin(Zone z) {
-        return (int)((Zone.getDistanceToOrigin(z) * 1000) / DRONE_SPEED);
+    public static float timeToOrigin(Zone z) {
+        return (Zone.getDistanceToOrigin(z) / DRONE_SPEED);
     }
-    public int timeToZone(Zone z) {
+    public float timeToZone(Zone z) {
         if(currentZone == null) {
             return timeToOrigin(z);
         }
@@ -82,10 +82,10 @@ public class Drone implements Runnable {
 
                         try {
                             Zone newZone = Zone.getZoneFromId(zones, event.getZoneID());
-                            int travelTimeToZone = timeToZone(newZone);
-                            System.out.println("[" + droneName + "] Travelling for " + travelTimeToZone + "s");
-                            Thread.sleep(travelTimeToZone);
-                            useUpBattery((int)(travelTimeToZone/1000));
+                            float travelTimeToZone = timeToZone(newZone);
+                            System.out.println("[" + droneName + "] Travelling for " + travelTimeToZone*60 + "s");
+                            Thread.sleep((int)(travelTimeToZone*60*SchedulerServer.simulationSpeed));
+                            useUpBattery(travelTimeToZone);
                             currentZone = newZone;
                         } catch (Zone.UnknownZoneException e) {
                             System.out.println("[" + droneName + "] Zone does not exist " + event.getZoneID());
@@ -98,8 +98,9 @@ public class Drone implements Runnable {
                         float emptyAmount = event.getWaterLeft();
                         if(event.getWaterLeft() > getWaterRemaining())
                             emptyAmount = getWaterRemaining();
-                        int emptyTime = (int) ((emptyAmount * 1000) / (float)DROP_RATE);
-                        Thread.sleep(emptyTime);
+                        float emptyTime = emptyAmount / DROP_RATE;
+                        Thread.sleep((int)(emptyTime*60*SchedulerServer.simulationSpeed));
+                        useUpBattery(emptyTime);
 
                         useUpWater(emptyAmount);
                         event.useWater(emptyAmount);
@@ -115,20 +116,20 @@ public class Drone implements Runnable {
                         }
                         break;
                     case DroneState.returnForRefill:
-                        int travelTimeToRefill = timeToOrigin(currentZone);
-                        System.out.println("[" + droneName + "] Travelling for " + travelTimeToRefill + "s");
-                        Thread.sleep(travelTimeToRefill);
-                        useUpBattery((int)(travelTimeToRefill/1000));
+                        float travelTimeToRefill = timeToOrigin(currentZone);
+                        System.out.println("[" + droneName + "] Travelling for " + travelTimeToRefill*60 + "s");
+                        Thread.sleep((int)(travelTimeToRefill*60*SchedulerServer.simulationSpeed));
+                        useUpBattery(travelTimeToRefill);
                         currentZone = null;
 
                         setDroneFull();
                         stateMachine.handleEvent(DroneEvent.fireAssigned);
                         break;
                     case DroneState.returnOrigin:
-                        int travelTimeToOrigin = timeToOrigin(currentZone);
-                        System.out.println("[" + droneName + "] Travelling for " + travelTimeToOrigin + "s");
-                        Thread.sleep(travelTimeToOrigin);
-                        useUpBattery((int)(travelTimeToOrigin/1000));
+                        float travelTimeToOrigin = timeToOrigin(currentZone);
+                        System.out.println("[" + droneName + "] Travelling for " + travelTimeToOrigin*60 + "s");
+                        Thread.sleep((int)(travelTimeToOrigin*60*SchedulerServer.simulationSpeed));
+                        useUpBattery(travelTimeToOrigin);
                         currentZone = null;
 
                         setDroneFull();

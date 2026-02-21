@@ -46,10 +46,10 @@ public class Zone {
         }
         throw new UnknownZoneException();
     }
-    public static double getDistance(Zone z1, Zone z2) {
-        return Math.sqrt(Math.pow(z1.centreX()-z2.centreX(), 2) + Math.pow(z1.centreY()-z2.centreY(), 2));
+    public static float getDistance(Zone z1, Zone z2) {
+        return (float)Math.sqrt(Math.pow(z1.centreX()-z2.centreX(), 2) + Math.pow(z1.centreY()-z2.centreY(), 2));
     }
-    public static double getDistanceToOrigin(Zone z) {
-        return Math.sqrt(Math.pow(z.centreX(), 2) + Math.pow(z.centreY(), 2));
+    public static float getDistanceToOrigin(Zone z) {
+        return (float)Math.sqrt(Math.pow(z.centreX(), 2) + Math.pow(z.centreY(), 2));
     }
 }
