@@ -1,11 +1,13 @@
 public class Drone implements Runnable {
     public static final float DROP_RATE = 2; //drop rate of water
     public static final float TANK_SIZE = 15; //tank size in liters
+    public static final float BATTERY_SIZE = 50; //battery size in minutes
 
     private Event event;
     private boolean busy = false;
     private boolean running = true;
     private float waterRemaining;
+    private float batteryRemaining;
 
     private final String droneName;
     private final DroneSubsystem droneSubsystem;
@@ -15,6 +17,7 @@ public class Drone implements Runnable {
         this.event = null;
         this.droneName = droneName;
         this.waterRemaining = TANK_SIZE;
+        this.batteryRemaining = BATTERY_SIZE;
     }
 
     public boolean isBusy() {
@@ -39,11 +42,11 @@ public class Drone implements Runnable {
         while(running) {
             try {
                 if(isTankEmpty()) {
+                    System.out.println("[" + droneName + "] Refilling tank");
 
                     // TODO: TRAVEL TO ORIGIN TO REFILL TANK
-
-                    System.out.println("[" + droneName + "] Refilling tank");
                     Thread.sleep(2000);
+
                     System.out.println("[" + droneName + "] Tank full");
                     waterRemaining = TANK_SIZE;
 

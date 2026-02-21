@@ -156,9 +156,9 @@ public class FireIncidentSubsystemGUI extends JFrame {
             droneMarkers.put(droneName, new DroneMarker(droneName,zoneId,state));
             zonesPanel.repaint();
             refreshSummary();
-    }); 
-}
-public int addEvent(String time, int zoneId, String eventType, String severity) {
+        });
+    }
+    public int addEvent(String time, int zoneId, String eventType, String severity) {
         final int[] rowIdx = new int[1];
         try {
             if (SwingUtilities.isEventDispatchThread()) {
