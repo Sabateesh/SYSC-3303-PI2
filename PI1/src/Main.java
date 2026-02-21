@@ -1,4 +1,5 @@
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import javax.swing.*;
 public class Main {
@@ -8,11 +9,12 @@ public class Main {
         Queue<String> toFire = new LinkedList<>();
         Scheduler scheduler = new Scheduler(fromFire, toFire);
         FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath, scheduler);
-        DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler);
+        List<Zone> zones = Zone.loadFromCSV("PI1/sample_zone_file.csv");
+        FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI(zones);
+        DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler, zones);
 
-        FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI("PI1/Sample_zone_file.csv");
         SwingUtilities.invokeLater(() -> gui.setVisible(true));
-
+ 
         //drone 0
         gui.registerDrone("Drone-0", Drone.TANK_SIZE);
         fire.loadEvents();
