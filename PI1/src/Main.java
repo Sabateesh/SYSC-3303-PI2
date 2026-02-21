@@ -5,11 +5,13 @@ import javax.swing.*;
 public class Main {
     public static void main(String[] args) {
         String eventPath = "PI1/Sample_event_file.csv";
+        String zonePath = "PI1/sample_zone_file.csv";
+
         Queue<Event> fromFire = new LinkedList<>();
         Queue<String> toFire = new LinkedList<>();
         Scheduler scheduler = new Scheduler(fromFire, toFire);
         FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath, scheduler);
-        List<Zone> zones = Zone.loadFromCSV("PI1/sample_zone_file.csv");
+        List<Zone> zones = Zone.loadFromCSV(zonePath);
         FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI(zones);
         DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler, zones);
 
