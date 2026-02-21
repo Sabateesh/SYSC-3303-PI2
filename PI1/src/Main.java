@@ -1,7 +1,6 @@
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 import java.util.LinkedList;
 import java.util.Queue;
+import javax.swing.*;
 public class Main {
     public static void main(String[] args) {
         String eventPath = "PI1/Sample_event_file.csv";
@@ -9,9 +8,27 @@ public class Main {
         Queue<String> toFire = new LinkedList<>();
         Scheduler scheduler = new Scheduler(fromFire, toFire);
         FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath, scheduler);
+        DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler);
+
+        FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI();
+        SwingUtilities.invokeLater(() -> gui.setVisible(true));
+
+        //drone 1
+        gui.registerDrone("Drone-1", Drone.TANK_SIZE);
+        fire.loadEvents();
+        for(Event event: fire.getEvents()) {
+            gui.addEvent(
+                event.getTime(),
+                event.getZoneID(),
+                event.getEventType().toString(),
+                event.getSeverity().toString()
+            );
+        }
+        gui.setStatus("Simulation started");
+
         //start threads (one JVM, multiple threads)
         Thread schedulerThread = new Thread(scheduler, "Scheduler");
-        Thread droneThread = new Thread(new DroneSubsystem(scheduler), "DroneSubsystem");
+        Thread droneThread = new Thread(droneSubsystem, "DroneSubsystem");
         Thread fireThread = new Thread(fire, "FireIncidentSubsystem");
         schedulerThread.start();
         droneThread.start();
@@ -26,5 +43,7 @@ public class Main {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+        gui.setStatus("Simulation complete");
+
     }
 }
