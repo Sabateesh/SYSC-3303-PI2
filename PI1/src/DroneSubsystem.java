@@ -1,3 +1,7 @@
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -5,17 +9,20 @@ import java.util.Queue;
 
 public class DroneSubsystem implements Runnable {
 
-    private final SchedulerServer scheduler;
-    private final static int NUM_DRONES = 3;
+    private final static int NUM_DRONES = 50;
     private final List<Thread> drones;
     private final Queue<Event> fromFire;
     private volatile boolean running;
+    private final String serverIP;
+    private final int serverPort;
 
-    public DroneSubsystem(SchedulerServer scheduler) {
-        this.scheduler = scheduler;
+    public DroneSubsystem(SchedulerServer scheduler, String serverIP, int serverPort) {
         this.fromFire = new LinkedList<>();
         this.drones = new ArrayList<>();
         this.running = true;
+        this.serverIP = serverIP;
+        this.serverPort = serverPort;
+        this.initializeDrones();
     }
 
     public void initializeDrones() {
@@ -29,19 +36,35 @@ public class DroneSubsystem implements Runnable {
         }
     }
 
-    public Event requestTask() throws InterruptedException {
+    private void sendRequest(DatagramSocket socket, String msg) throws Exception {
+        byte[] data = msg.getBytes(StandardCharsets.UTF_8);
+        DatagramPacket packet = new DatagramPacket(
+                data, data.length, new InetSocketAddress(hostIP, hostPort)
+        );
+        socket.send(packet);
+        System.out.println("Sent: " + msg + "\n");
+    }
+
+    private String receiveResponse(DatagramSocket socket) throws Exception {
+        byte[] buf = new byte[4096];
+        DatagramPacket packet = new DatagramPacket(buf, buf.length);
+        socket.receive(packet);
+        return new String(packet.getData(), packet.getOffset(), packet.getLength(), StandardCharsets.UTF_8);
+    }
+
+    /*public Event requestTask() throws InterruptedException {
         synchronized (fromFire) {
             while (fromFire.isEmpty()) {
                 fromFire.wait();
             }
             return fromFire.poll();
         }
-    }
+    }*/
 
-    public void reportDone(Event e) {
+    /*public void reportDone(Event e) {
         if (e == null) return;
         scheduler.reportDone(e);
-    }
+    }*/
 
     @Override
     public void run() {
