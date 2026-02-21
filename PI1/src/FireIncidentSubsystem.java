@@ -67,6 +67,24 @@ public class FireIncidentSubsystem implements Runnable {
         return events;
     }
 
+    //parse timestamp string "HH:mm:ss"
+    private long parseTimeToMillis(String time){
+        try{
+            String[] parts = time.split("[:.]");
+            int hours = Integer.parseInt(parts[0]);
+            int min = Integer.parseInt(parts[1]);
+            int sec = Integer.parseInt(parts[2]);
+            int millis = 0;
+            if (parts.length > 3){
+                millis = Integer.parseInt(parts[3]);
+            }
+            return ((hours * 3600L) + (min * 60L) + sec) * 1000L + millis;
+        } catch(Exception e){
+            System.err.println("[" + threadName + "] error parsing time: " + time);
+            return 0;
+        }
+    }
+
     @Override
     public void run() {
         //load events
@@ -77,9 +95,27 @@ public class FireIncidentSubsystem implements Runnable {
             System.out.println("[FireIncidentSubsystem] No events to send.");
             return;
         }
+        //send events spaced out by timestamps
+        long previousTimeMills = parseTimeToMillis(events.get(0).getTime());
+
         //send all events to the scheduler
         for (Event event : events) {
+            long currentTimeMills = parseTimeToMillis(event.getTime());
+            long delay = currentTimeMills - previousTimeMills;
+            //wait for the delay
+            if(delay > 0){
+                try{
+                    System.out.println("[" + threadName + "] waiting " + (delay / 1000) + "s until next event...");
+                    Thread.sleep(delay/60);
+                } catch ( InterruptedException e){
+                    System.out.println("[" + threadName + "] interrupted while waiting");
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+            System.out.println("[" + threadName + "] Sending event: " + event);
             scheduler.sendEvent(event);
+            previousTimeMills = currentTimeMills;
         }
         //receive ALL confirmations
         for (int i = 0; i < events.size(); i++) {
