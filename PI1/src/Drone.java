@@ -49,6 +49,7 @@ public class Drone implements Runnable {
 
                     System.out.println("[" + droneName + "] Tank full");
                     waterRemaining = TANK_SIZE;
+                    batteryRemaining = BATTERY_SIZE;
 
                 } else {
                     if (isBusy()) { //the drone has a fire to address

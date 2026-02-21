@@ -66,7 +66,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         JPanel rightpPanel = new JPanel(new GridLayout(2,1,8,8));
         
         //drone table
-        String[] droneCols = {"Drone", "State", "Water (L)", "Zone"};
+        String[] droneCols = {"Drone", "State", "Water (L)", "Zone", "Battery"};
         droneTableModel = new DefaultTableModel(droneCols, 0){
             @Override
             public boolean isCellEditable(int row, int col){
@@ -74,10 +74,17 @@ public class FireIncidentSubsystemGUI extends JFrame {
             }
         };
         JTable droneTable = new JTable(droneTableModel);
+        droneTable.getTableHeader().setReorderingAllowed(false);
+        droneTable.getTableHeader().setResizingAllowed(false);
+        droneTable.setRowSelectionAllowed(false);
+        droneTable.setColumnSelectionAllowed(false);
+        droneTable.setCellSelectionEnabled(false);
+
         droneTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN,12));
         droneTable.setRowHeight(22);
         droneTable.getColumnModel().getColumn(1).setCellRenderer(new DroneStateCellRenderer());
-        droneTable.getColumnModel().getColumn(2).setCellRenderer(new ProgressCellRenderer()); //TODO
+        droneTable.getColumnModel().getColumn(2).setCellRenderer(new ReservoirRenderer());
+        droneTable.getColumnModel().getColumn(4).setCellRenderer(new ProgressCellRenderer());
         JPanel dronesPanel = new JPanel(new BorderLayout(6, 6));
         dronesPanel.setBorder(new TitledBorder("Drones"));
         dronesPanel.add(new JScrollPane(droneTable), BorderLayout.CENTER);
@@ -95,6 +102,12 @@ public class FireIncidentSubsystemGUI extends JFrame {
             }
         };
         JTable eventTable = new JTable(eventTableModel);
+        eventTable.getTableHeader().setReorderingAllowed(false);
+        eventTable.getTableHeader().setResizingAllowed(false);
+        eventTable.setRowSelectionAllowed(false);
+        eventTable.setColumnSelectionAllowed(false);
+        eventTable.setCellSelectionEnabled(false);
+
         eventTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         eventTable.setRowHeight(20);
         eventTable.getColumnModel().getColumn(4).setCellRenderer(new EventStatusCellRenderer());
@@ -135,8 +148,9 @@ public class FireIncidentSubsystemGUI extends JFrame {
             droneTableModel.addRow(new Object[]{
                 droneName,
                 DroneState.IDLE.getLabel(),
-                (int)(waterCapacity*ProgressCellRenderer.precision),
-                "Base"
+                (int)(waterCapacity*ReservoirRenderer.precision),
+                "Base",
+                100
             });
             droneMarkers.put(droneName, new DroneMarker(droneName,-1,DroneState.IDLE));
             refreshSummary();
@@ -148,7 +162,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
             for(int r = 0; r < droneTableModel.getRowCount(); r++){
                 if(droneName.equals(droneTableModel.getValueAt(r, 0))){
                     droneTableModel.setValueAt(state.getLabel(), r, 1);
-                    droneTableModel.setValueAt((int)(waterLevel*ProgressCellRenderer.precision), r, 2);
+                    droneTableModel.setValueAt((int)(waterLevel*ReservoirRenderer.precision), r, 2);
                     droneTableModel.setValueAt(zoneId > 0 ? "Zone " + zoneId : "Base", r, 3);
                     break;
                 }
@@ -433,14 +447,12 @@ public class FireIncidentSubsystemGUI extends JFrame {
         }
     }
 
-    //a table cell renderer that displays a JProgressBar
-    static class ProgressCellRenderer extends JProgressBar implements TableCellRenderer {
+    static class ReservoirRenderer extends ProgressCellRenderer {
         public static final int precision = 10;
 
-        ProgressCellRenderer() {
+        ReservoirRenderer() {
             super();
             super.setMaximum((int)(Drone.TANK_SIZE*precision));
-            setStringPainted(true);
         }
 
         @Override
@@ -450,6 +462,14 @@ public class FireIncidentSubsystemGUI extends JFrame {
             setString(currentVal+"/"+maxVal);
 
             super.paintComponent(g);
+        }
+    }
+
+    //a table cell renderer that displays a JProgressBar
+    static class ProgressCellRenderer extends JProgressBar implements TableCellRenderer {
+        ProgressCellRenderer() {
+            super();
+            setStringPainted(true);
         }
 
         @Override
@@ -464,5 +484,4 @@ public class FireIncidentSubsystemGUI extends JFrame {
             return this;
         }
     }
-
 }
