@@ -36,6 +36,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
     private final DefaultTableModel eventTableModel;
     //zone map state
     private final List<ZoneRect> zones;
+    private final String zonePath;
     private final Map<Integer,FireStatus> zoneFireStatus;
     private final Map<Integer,String> zoneSeverity;
     private final ZonesPanel zonesPanel;
@@ -46,7 +47,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
     private final JLabel droneSummeryLabel;
     private final JLabel statusLabel;
         
-    public FireIncidentSubsystemGUI() {
+    public FireIncidentSubsystemGUI(String zonePath) {
         super("PI2 - Firefighting Drone Swarm");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1000, 650);
@@ -57,8 +58,10 @@ public class FireIncidentSubsystemGUI extends JFrame {
         zoneFireStatus = new HashMap<>();
         zoneSeverity = new HashMap<>();
         droneMarkers = new HashMap<>();
+        
 
         //zones panel
+        this.zonePath = zonePath;
         zones = loadZones();
         zonesPanel = new ZonesPanel(zones, zoneFireStatus, zoneSeverity, droneMarkers);
         zonesPanel.setBorder(new TitledBorder("Zone Map"));
@@ -249,14 +252,54 @@ public class FireIncidentSubsystemGUI extends JFrame {
             "Drones: %d total | %d idle | %d en route | %d dropping", total, idle, InRoute, dropping));
     }
 
-    //load zones 
-    private List<ZoneRect> loadZones() {
+    //load zones from csv 
+ private List<ZoneRect> loadZones() {
+        List<int[]> rawZones = new ArrayList<>();
+        int maxX = 0, maxY = 0;
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(zonePath))) {
+            String line;
+            boolean isFirstLine = true;
+            while ((line = reader.readLine()) != null) {
+                if (isFirstLine) {
+                    isFirstLine = false;
+                    continue;
+                }
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                String cleaned = line.replace("(", "").replace(")", "");
+                String[] parts = cleaned.split(",");
+                if (parts.length < 5) continue;
+                int id = Integer.parseInt(parts[0].trim());
+                int x1 = Integer.parseInt(parts[1].trim());
+                int y1 = Integer.parseInt(parts[2].trim());
+                int x2 = Integer.parseInt(parts[3].trim());
+                int y2 = Integer.parseInt(parts[4].trim());
+                rawZones.add(new int[]{id, x1, y1, x2, y2});
+                if (x2 > maxX) maxX = x2;
+                if (y2 > maxY) maxY = y2;
+            }
+        } catch(Exception e){
+            System.err.println("[GUI] error loading zones from " + zonePath + ": " + e.getMessage());
+            return new ArrayList<>();
+        }
+
+        //scale to fit panel
+        int panelW = 520;
+        int panelH = 520;
+        int padding = 20;
+        double scaleX = (panelW - 2.0 * padding) / Math.max(maxX, 1);
+        double scaleY = (panelH - 2.0 * padding) / Math.max(maxY, 1);
+        double scale = Math.min(scaleX, scaleY);
         List<ZoneRect> z = new ArrayList<>();
-        z.add(new ZoneRect(1, 30, 30, 240, 160));
-        z.add(new ZoneRect(2, 290, 30, 230, 160));
-        z.add(new ZoneRect(3, 30, 210, 240, 160));
-        z.add(new ZoneRect(4, 290, 210, 230, 160));
-        z.add(new ZoneRect(5, 160, 390, 230, 130));
+        for (int[] raw : rawZones) {
+            int id = raw[0];
+            int x = (int) (raw[1] * scale) + padding;
+            int y = (int) (raw[2] * scale) + padding;
+            int w = (int) ((raw[3] - raw[1]) * scale);
+            int h = (int) ((raw[4] - raw[2]) * scale);
+            z.add(new ZoneRect(id, x, y, w, h));
+        }
+        System.out.println("[GUI] loaded " + z.size() + " zones from " + zonePath);
         return z;
     }
 
