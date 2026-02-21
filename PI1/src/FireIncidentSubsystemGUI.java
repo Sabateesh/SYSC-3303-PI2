@@ -2,51 +2,52 @@ import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableCellRenderer;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-
 //GUI Scaffold
 public class FireIncidentSubsystemGUI extends JFrame {
-         //drone states
-        public enum DroneState{
-            IDLE("Idle", new Color(100,180,100)),
-            InRoute("In Route", new Color(60,130,220)),
-            DroppingAgent("Dropping Agent", new Color(220,140,40)),
-            Returning("Returning", new Color(160,100,200)),
-            Refilling("Refilling", new Color(80,180,180));
-            private final String label;
-            private final Color color;
-            DroneState(String lable, Color color){
-                this.label = lable;
-                this.color = color;
-            }
-            public String getLabel(){return label;}
-            public Color getColor(){return color;}
+     //drone states
+    public enum DroneState{
+        IDLE("Idle", new Color(100,180,100)),
+        InRoute("In Route", new Color(60,130,220)),
+        DroppingAgent("Dropping Agent", new Color(220,140,40)),
+        Returning("Returning", new Color(160,100,200)),
+        Refilling("Refilling", new Color(80,180,180));
+        private final String label;
+        private final Color color;
+        DroneState(String lable, Color color){
+            this.label = lable;
+            this.color = color;
         }
-        //fire status for zones
-        public enum FireStatus{
-            None, Active, Extinguished
-        }
-        //data models
-        private final DefaultTableModel droneTableModel;
-        private final DefaultTableModel eventTableModel;
-        //zone map state
-        private final List<ZoneRect> zones;
-        private final Map<Integer,FireStatus> zoneFireStatus;
-        private final Map<Integer,String> zoneSeverity;
-        private final ZonesPanel zonesPanel;
-        //drone tracking on map
-        private final Map<String,DroneMarker> droneMarkers;
-        //summery labels
-        private final JLabel activeFiresLabel;
-        private final JLabel droneSummeryLabel;
-        private final JLabel statusLabel;
+        public String getLabel(){return label;}
+        public Color getColor(){return color;}
+    }
+    //fire status for zones
+    public enum FireStatus{
+        None, Active, Extinguished
+    }
+    //data models
+    private final DefaultTableModel droneTableModel;
+    private final DefaultTableModel eventTableModel;
+    //zone map state
+    private final List<ZoneRect> zones;
+    private final String zonePath;
+    private final Map<Integer,FireStatus> zoneFireStatus;
+    private final Map<Integer,String> zoneSeverity;
+    private final ZonesPanel zonesPanel;
+    //drone tracking on map
+    private final Map<String,DroneMarker> droneMarkers;
+    //summery labels
+    private final JLabel activeFiresLabel;
+    private final JLabel droneSummeryLabel;
+    private final JLabel statusLabel;
         
-    public FireIncidentSubsystemGUI() {
+    public FireIncidentSubsystemGUI(String zonePath) {
         super("PI2 - Firefighting Drone Swarm");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1000, 650);
@@ -57,8 +58,10 @@ public class FireIncidentSubsystemGUI extends JFrame {
         zoneFireStatus = new HashMap<>();
         zoneSeverity = new HashMap<>();
         droneMarkers = new HashMap<>();
+        
 
         //zones panel
+        this.zonePath = zonePath;
         zones = loadZones();
         zonesPanel = new ZonesPanel(zones, zoneFireStatus, zoneSeverity, droneMarkers);
         zonesPanel.setBorder(new TitledBorder("Zone Map"));
@@ -66,7 +69,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         JPanel rightpPanel = new JPanel(new GridLayout(2,1,8,8));
         
         //drone table
-        String[] droneCols = {"Drone", "State", "Water (L)", "Zone"};
+        String[] droneCols = {"Drone", "State", "Water (L)", "Zone", "Battery"};
         droneTableModel = new DefaultTableModel(droneCols, 0){
             @Override
             public boolean isCellEditable(int row, int col){
@@ -74,9 +77,17 @@ public class FireIncidentSubsystemGUI extends JFrame {
             }
         };
         JTable droneTable = new JTable(droneTableModel);
+        droneTable.getTableHeader().setReorderingAllowed(false);
+        droneTable.getTableHeader().setResizingAllowed(false);
+        droneTable.setRowSelectionAllowed(false);
+        droneTable.setColumnSelectionAllowed(false);
+        droneTable.setCellSelectionEnabled(false);
+
         droneTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN,12));
         droneTable.setRowHeight(22);
         droneTable.getColumnModel().getColumn(1).setCellRenderer(new DroneStateCellRenderer());
+        droneTable.getColumnModel().getColumn(2).setCellRenderer(new ReservoirRenderer());
+        droneTable.getColumnModel().getColumn(4).setCellRenderer(new ProgressCellRenderer());
         JPanel dronesPanel = new JPanel(new BorderLayout(6, 6));
         dronesPanel.setBorder(new TitledBorder("Drones"));
         dronesPanel.add(new JScrollPane(droneTable), BorderLayout.CENTER);
@@ -94,6 +105,12 @@ public class FireIncidentSubsystemGUI extends JFrame {
             }
         };
         JTable eventTable = new JTable(eventTableModel);
+        eventTable.getTableHeader().setReorderingAllowed(false);
+        eventTable.getTableHeader().setResizingAllowed(false);
+        eventTable.setRowSelectionAllowed(false);
+        eventTable.setColumnSelectionAllowed(false);
+        eventTable.setCellSelectionEnabled(false);
+
         eventTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         eventTable.setRowHeight(20);
         eventTable.getColumnModel().getColumn(4).setCellRenderer(new EventStatusCellRenderer());
@@ -129,25 +146,26 @@ public class FireIncidentSubsystemGUI extends JFrame {
     }
 
     //register a drone so it appears in the table
-    public void registerDrone(String droneName, double waterCapacity){
+    public void registerDrone(String droneName, float waterCapacity){
         SwingUtilities.invokeLater(() -> {
             droneTableModel.addRow(new Object[]{
                 droneName,
                 DroneState.IDLE.getLabel(),
-                String.format("%.1f", waterCapacity),
-                "Base"
+                (int)(waterCapacity*ReservoirRenderer.precision),
+                "Base",
+                100
             });
             droneMarkers.put(droneName, new DroneMarker(droneName,-1,DroneState.IDLE));
             refreshSummary();
         });
     }
     //update drones state, watr lvl and assigned zone
-    public void updateDroneState(String droneName, DroneState state, double waterLevel, int zoneId){
+    public void updateDroneState(String droneName, DroneState state, float waterLevel, int zoneId){
         SwingUtilities.invokeLater(() -> {
             for(int r = 0; r < droneTableModel.getRowCount(); r++){
                 if(droneName.equals(droneTableModel.getValueAt(r, 0))){
                     droneTableModel.setValueAt(state.getLabel(), r, 1);
-                    droneTableModel.setValueAt(String.format("%.1f", waterLevel), r, 2);
+                    droneTableModel.setValueAt((int)(waterLevel*ReservoirRenderer.precision), r, 2);
                     droneTableModel.setValueAt(zoneId > 0 ? "Zone " + zoneId : "Base", r, 3);
                     break;
                 }
@@ -155,9 +173,9 @@ public class FireIncidentSubsystemGUI extends JFrame {
             droneMarkers.put(droneName, new DroneMarker(droneName,zoneId,state));
             zonesPanel.repaint();
             refreshSummary();
-    }); 
-}
-public int addEvent(String time, int zoneId, String eventType, String severity) {
+        });
+    }
+    public int addEvent(String time, int zoneId, String eventType, String severity) {
         final int[] rowIdx = new int[1];
         try {
             if (SwingUtilities.isEventDispatchThread()) {
@@ -234,14 +252,54 @@ public int addEvent(String time, int zoneId, String eventType, String severity) 
             "Drones: %d total | %d idle | %d en route | %d dropping", total, idle, InRoute, dropping));
     }
 
-    //load zones 
-    private List<ZoneRect> loadZones() {
+    //load zones from csv 
+ private List<ZoneRect> loadZones() {
+        List<int[]> rawZones = new ArrayList<>();
+        int maxX = 0, maxY = 0;
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(zonePath))) {
+            String line;
+            boolean isFirstLine = true;
+            while ((line = reader.readLine()) != null) {
+                if (isFirstLine) {
+                    isFirstLine = false;
+                    continue;
+                }
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                String cleaned = line.replace("(", "").replace(")", "");
+                String[] parts = cleaned.split(",");
+                if (parts.length < 5) continue;
+                int id = Integer.parseInt(parts[0].trim());
+                int x1 = Integer.parseInt(parts[1].trim());
+                int y1 = Integer.parseInt(parts[2].trim());
+                int x2 = Integer.parseInt(parts[3].trim());
+                int y2 = Integer.parseInt(parts[4].trim());
+                rawZones.add(new int[]{id, x1, y1, x2, y2});
+                if (x2 > maxX) maxX = x2;
+                if (y2 > maxY) maxY = y2;
+            }
+        } catch(Exception e){
+            System.err.println("[GUI] error loading zones from " + zonePath + ": " + e.getMessage());
+            return new ArrayList<>();
+        }
+
+        //scale to fit panel
+        int panelW = 520;
+        int panelH = 520;
+        int padding = 20;
+        double scaleX = (panelW - 2.0 * padding) / Math.max(maxX, 1);
+        double scaleY = (panelH - 2.0 * padding) / Math.max(maxY, 1);
+        double scale = Math.min(scaleX, scaleY);
         List<ZoneRect> z = new ArrayList<>();
-        z.add(new ZoneRect(1, 30, 30, 240, 160));
-        z.add(new ZoneRect(2, 290, 30, 230, 160));
-        z.add(new ZoneRect(3, 30, 210, 240, 160));
-        z.add(new ZoneRect(4, 290, 210, 230, 160));
-        z.add(new ZoneRect(5, 160, 390, 230, 130));
+        for (int[] raw : rawZones) {
+            int id = raw[0];
+            int x = (int) (raw[1] * scale) + padding;
+            int y = (int) (raw[2] * scale) + padding;
+            int w = (int) ((raw[3] - raw[1]) * scale);
+            int h = (int) ((raw[4] - raw[2]) * scale);
+            z.add(new ZoneRect(id, x, y, w, h));
+        }
+        System.out.println("[GUI] loaded " + z.size() + " zones from " + zonePath);
         return z;
     }
 
@@ -408,7 +466,7 @@ public int addEvent(String time, int zoneId, String eventType, String severity) 
         }
     }
     //cell renderer for event state column
-   static class EventStatusCellRenderer extends DefaultTableCellRenderer {
+    static class EventStatusCellRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                                                        boolean isSelected, boolean hasFocus, int row, int col) {
@@ -432,4 +490,41 @@ public int addEvent(String time, int zoneId, String eventType, String severity) 
         }
     }
 
+    static class ReservoirRenderer extends ProgressCellRenderer {
+        public static final int precision = 10;
+
+        ReservoirRenderer() {
+            super();
+            super.setMaximum((int)(Drone.TANK_SIZE*precision));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            String currentVal = String.format("%.1f", ((float)getValue()/(float)precision));
+            String maxVal = String.format("%.1f", Drone.TANK_SIZE);
+            setString(currentVal+"/"+maxVal);
+
+            super.paintComponent(g);
+        }
+    }
+
+    //a table cell renderer that displays a JProgressBar
+    static class ProgressCellRenderer extends JProgressBar implements TableCellRenderer {
+        ProgressCellRenderer() {
+            super();
+            setStringPainted(true);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            int progress = 0;
+            if (value instanceof Float) {
+                progress = Math.round(((Float) value) * 100f);
+            } else if (value instanceof Integer) {
+                progress = (int) value;
+            }
+            setValue(progress);
+            return this;
+        }
+    }
 }

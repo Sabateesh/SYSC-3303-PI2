@@ -10,8 +10,9 @@ public class Main {
         FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath, scheduler);
         DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler);
 
-        FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI();
+        FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI("PI1/Sample_zone_file.csv");
         SwingUtilities.invokeLater(() -> gui.setVisible(true));
+
 
         //drone 1
         gui.registerDrone("Drone-1", Drone.TANK_SIZE);
