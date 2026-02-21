@@ -3,14 +3,17 @@ import java.net.DatagramSocket;
 
 enum DroneEvent{
     fireAssigned,
+    arrivedToFire,
     needMoreWater,
     jobFinished,
+    arrivedToOrigin,
     error
 }
 
 enum DroneState{
     idle,
-    dispatched,
+    enRoute,
+    droppingAgent,
     refilling,
     returnOrigin
 }
@@ -49,27 +52,39 @@ public class DroneStateMachine {
         switch(state){
             case idle:
                 if (ev == DroneEvent.fireAssigned){
-                    transitionTo(DroneState.dispatched, ev);
+                    transitionTo(DroneState.enRoute, ev);
                 } else{
                     ctx.log("[FSM] Ignored " + ev + " (state=IDLE)");
                 }
-            break;
+                break;
 
-            case dispatched:
-                if (ev == DroneEvent.jobFinished) {
-                    transitionTo(DroneState.returnOrigin, ev);
+            case enRoute:
+                if (ev == DroneEvent.arrivedToFire) {
+                    transitionTo(DroneState.droppingAgent, ev);
                 }
-                else if (ev == DroneEvent.needMoreWater){
-                    transitionTo(DroneState.refilling, ev);
+                else if (ev == DroneEvent.jobFinished){
+                    transitionTo(DroneState.returnOrigin, ev);
                 }
                 else{
                     ctx.log("[FSM] Ignored " + ev + " (state=Dispatched)");
                 }
-            break;
+                break;
+
+            case droppingAgent:
+                if (ev == DroneEvent.needMoreWater){
+                    transitionTo(DroneState.returnOrigin, ev);
+                }
+                else if (ev == DroneEvent.jobFinished){
+                    transitionTo(DroneState.returnOrigin, ev);
+                }
+                else{
+                    ctx.log("[FSM] Ignored " + ev + " (state=Refilling)");
+                }
+                break;
 
             case refilling:
                 if (ev == DroneEvent.fireAssigned){
-                    transitionTo(DroneState.dispatched, ev);
+                    transitionTo(DroneState.enRoute, ev);
                 }
                 else if (ev == DroneEvent.jobFinished){
                     transitionTo(DroneState.idle, ev);
@@ -77,11 +92,16 @@ public class DroneStateMachine {
                 else{
                     ctx.log("[FSM] Ignored " + ev + " (state=Refilling)");
                 }
-            break;
+                break;
 
             case returnOrigin:
-                transitionTo(DroneState.idle, ev);
-            break;
+                if (ev == DroneEvent.arrivedToOrigin){
+                    transitionTo(DroneState.idle, ev);
+                }
+                else{
+                    ctx.log("[FSM] Ignored " + ev + " (state=Refilling)");
+                }
+                break;
         }
     }
 }
