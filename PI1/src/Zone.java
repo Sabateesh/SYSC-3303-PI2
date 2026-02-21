@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Zone {
-    public static class UnknownZoneException extends Exception {};
-
     public final int id, x1, y1, x2, y2;
     public Zone(int id, int x1, int y1, int x2, int y2) {
         this.id = id;
@@ -38,18 +36,5 @@ public class Zone {
             System.err.println("error loading zones: " + e.getMessage());
         }
         return zones;
-    }
-    public static Zone getZoneFromId(List<Zone> zones, int id) throws UnknownZoneException {
-        for(Zone z : zones) {
-            if (z.id == id)
-                return z;
-        }
-        throw new UnknownZoneException();
-    }
-    public static double getDistance(Zone z1, Zone z2) {
-        return Math.sqrt(Math.pow(z1.centreX()-z2.centreX(), 2) + Math.pow(z1.centreY()-z2.centreY(), 2));
-    }
-    public static double getDistanceToOrigin(Zone z) {
-        return Math.sqrt(Math.pow(z.centreX(), 2) + Math.pow(z.centreY(), 2));
     }
 }

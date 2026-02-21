@@ -5,28 +5,23 @@ import javax.swing.*;
 public class Main {
     public static void main(String[] args) {
         String eventPath = "PI1/Sample_event_file.csv";
-        String zonePath = "PI1/sample_zone_file.csv";
-
         Queue<Event> fromFire = new LinkedList<>();
         Queue<String> toFire = new LinkedList<>();
         Scheduler scheduler = new Scheduler(fromFire, toFire);
         FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath, scheduler);
-        List<Zone> zones = Zone.loadFromCSV(zonePath);
+        List<Zone> zones = Zone.loadFromCSV("PI1/sample_zone_file.csv");
         FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI(zones);
-        DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler, zones);
+        DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler, zones, gui);
 
         SwingUtilities.invokeLater(() -> gui.setVisible(true));
- 
+
         //drone 0
         gui.registerDrone("Drone-0", Drone.TANK_SIZE);
         fire.loadEvents();
         for(Event event: fire.getEvents()) {
-            gui.addEvent(
-                event.getTime(),
-                event.getZoneID(),
-                event.getEventType().toString(),
-                event.getSeverity().toString()
-            );
+
+            int row = gui.addEvent(event.getTime(), event.getZoneID(), event.getEventType().toString(), event.getSeverity().toString());
+            event.setGuiRowIndex(row);
         }
         gui.setStatus("Simulation started");
 

@@ -12,18 +12,20 @@ public class DroneSubsystem implements Runnable {
     private final SchedulerServer scheduler;
     private final static int NUM_DRONES = 1;
     private final List<Thread> drones;
-    private final List<Zone> zones;
     private final Queue<Event> fromFire;
     private volatile boolean running;
+    private final List<Zone> zones;
+    private final FireIncidentSubsystemGUI gui;
 //    private final String serverIP;
 //    private final int serverPort;
 
-    public DroneSubsystem(SchedulerServer scheduler, List<Zone> zones) {
+    public DroneSubsystem(SchedulerServer scheduler, List<Zone> zones, FireIncidentSubsystemGUI gui) {
         this.scheduler = scheduler;
         this.fromFire = new LinkedList<>();
         this.drones = new ArrayList<>();
-        this.zones = zones;
         this.running = true;
+        this.zones = zones;
+        this.gui = gui;
 //        this.serverIP = serverIP;
 //        this.serverPort = serverPort;
         this.initializeDrones();
@@ -32,7 +34,7 @@ public class DroneSubsystem implements Runnable {
     public void initializeDrones() {
         for(int i=0; i<NUM_DRONES; i++) {
             String droneName = "Drone-"+i;
-            Drone drone = new Drone(this, zones, droneName);
+            Drone drone = new Drone(this, droneName, zones, gui);
             Thread droneThread =
                     new Thread(drone, droneName);
             drones.add(droneThread);

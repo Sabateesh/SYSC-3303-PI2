@@ -25,6 +25,7 @@ public class Event implements Serializable {
     private final Severity severity;
 
     private float waterLeft; //amount of water left to put out the fire
+    private int guiRowIndex = -1;
 
     //event constr
     public Event(String time, int zoneID, EventType eventType, Severity severity){
@@ -66,6 +67,14 @@ public class Event implements Serializable {
             waterLeft -= waterVolume;
     }
 
+    public void setGuiRowIndex(int index) {
+        this.guiRowIndex = index;
+    }
+
+    public int getGuiRowIndex() {
+        return guiRowIndex;
+    }
+
     //parse an eventtype from a string
     public static EventType parseEventType(String typeString){
         try{
@@ -85,8 +94,4 @@ public class Event implements Serializable {
     public String toString(){
         return String.format("Event[Time=%s, Zone=%d, Type=%s, Severity=%s (%dL)]", time, zoneID, eventType, severity, severity.getWaterRequired());
     }
-
-
-
-
 }
