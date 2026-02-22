@@ -65,9 +65,6 @@ public class Event implements Serializable {
     public float getWaterLeft(){
         return waterLeft;
     } //get the amount of water left to put out the fire
-    public boolean isFireOut() {
-        return getWaterLeft() <= 0;
-    } //whether the fire is gone
 
     public void deliverEvent(State newState) { curState = newState; }
     public void useWater(float waterVolume) { //use water on a fire

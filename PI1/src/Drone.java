@@ -142,7 +142,7 @@ public class Drone implements Runnable {
                         useUpWater(emptyAmount);
                         event.useWater(emptyAmount);
 
-                        if(event.isFireOut()) {
+                        if(event.getWaterLeft() <= 0) {
                             droneSubsystem.reportDone(event);
                             System.out.println("[" + droneName + "] Completed fire at zone " + event.getZoneID());
 

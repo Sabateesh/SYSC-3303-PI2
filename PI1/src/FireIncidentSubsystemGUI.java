@@ -117,7 +117,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
 
         eventTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         eventTable.setRowHeight(20);
-        eventTable.getColumnModel().getColumn(4).setCellRenderer(new EventStatusCellRenderer());
+        eventTable.getColumnModel().getColumn(4).setCellRenderer(new EventProgressRenderer());
         JPanel eventsPanel = new JPanel(new BorderLayout(6, 6));
         eventsPanel.setBorder(new TitledBorder("Fire Incidents"));
         eventsPanel.add(new JScrollPane(eventTable), BorderLayout.CENTER);
@@ -214,28 +214,28 @@ public class FireIncidentSubsystemGUI extends JFrame {
 
         switch(e.currentState()) {
             case Event.State.INACTIVE:
-                eventTableModel.setValueAt("Inactive", r, 4);
+                eventTableModel.setValueAt(new EventProgressRenderer.ProgressData(0, "Inactive"), r, 4);
                 zoneFireStatus.put(e.getZoneID(), FireStatus.None);
                 break;
             case Event.State.EXTINGUISHED:
-                eventTableModel.setValueAt("Extinguished", r, 4);
+                eventTableModel.setValueAt(new EventProgressRenderer.ProgressData(100, "Extinguished"), r, 4);
                 zoneFireStatus.put(e.getZoneID(), FireStatus.Extinguished);
                 break;
             case Event.State.PENDING:
-                eventTableModel.setValueAt("Pending", r, 4);
+                eventTableModel.setValueAt(new EventProgressRenderer.ProgressData(0, "Pending"), r, 4);
                 zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
                 zoneSeverity.put(e.getZoneID(), e.getSeverity().toString());
                 break;
             case Event.State.DROPPING:
-                eventTableModel.setValueAt("Dropping", r, 4);
+                eventTableModel.setValueAt(new EventProgressRenderer.ProgressData((int)(((e.getWaterRequired()-e.getWaterLeft())*100)/e.getWaterRequired()), "Dropping"), r, 4);
                 zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
                 break;
             case Event.State.DISPATCHED:
-                eventTableModel.setValueAt("Dispatched", r, 4);
+                eventTableModel.setValueAt(new EventProgressRenderer.ProgressData((int)(((e.getWaterRequired()-e.getWaterLeft())*100)/e.getWaterRequired()), "Dispatched"), r, 4);
                 zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
                 break;
             default:
-                eventTableModel.setValueAt("Unknown", r, 4);
+                eventTableModel.setValueAt(new EventProgressRenderer.ProgressData((int)(((e.getWaterRequired()-e.getWaterLeft())*100)/e.getWaterRequired()), "Unknown"), r, 4);
                 zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
                 break;
         }
@@ -282,7 +282,11 @@ public class FireIncidentSubsystemGUI extends JFrame {
     }
     //internal helpers
     private void refreshSummary(){
-        long activeFires = events.stream().filter(e -> !e.isFireOut()).count();
+        long activeFires = events.stream()
+                .filter(e ->
+                        e.currentState() != Event.State.EXTINGUISHED &&
+                        e.currentState() != Event.State.INACTIVE)
+                .count();
         activeFiresLabel.setText("Active Fires:" + activeFires);
 
         int total = drones.size();
@@ -487,31 +491,8 @@ public class FireIncidentSubsystemGUI extends JFrame {
             return c;
         }
     }
-    //cell renderer for event state column
-    static class EventStatusCellRenderer extends DefaultTableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus, int row, int col) {
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
-            if (value != null) {
-                String status = value.toString().toLowerCase();
-                if (status.contains("extinguished")) {
-                    c.setForeground(new Color(40, 140, 40));
-                } else if (status.contains("dropping")) {
-                    c.setForeground(new Color(200, 120, 20));
-                } else if (status.contains("dispatched")) {
-                    c.setForeground(new Color(50, 100, 200));
-                } else if (status.contains("pending")) {
-                    c.setForeground(new Color(150, 150, 150));
-                } else {
-                    c.setForeground(Color.BLACK);
-                }
-                setFont(getFont().deriveFont(Font.BOLD));
-            }
-            return c;
-        }
-    }
 
+    //a table cell renderer that displays the current water reservoir
     static class ReservoirRenderer extends ProgressCellRenderer {
         public static final int precision = 10;
 
@@ -527,6 +508,60 @@ public class FireIncidentSubsystemGUI extends JFrame {
             setString(currentVal+"/"+maxVal);
 
             super.paintComponent(g);
+        }
+    }
+
+    //a table cell renderer that displays the current water reservoir
+    static class EventProgressRenderer extends ProgressCellRenderer {
+        public static class ProgressData {
+            private final int value;
+            private final String text;
+
+            public ProgressData(int value, String text) {
+                this.value = value;
+                this.text = text;
+            }
+
+            public int getValue() { return value; }
+            public String getText() { return text; }
+        }
+
+        EventProgressRenderer() {
+            super();
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table, Object value,
+                boolean isSelected, boolean hasFocus,
+                int row, int column) {
+
+            if (value instanceof ProgressData data) {
+                setValue(data.getValue());
+                setString(data.getText());
+
+
+                if (data.getText() != null) {
+                    String status = data.getText().toLowerCase();
+                    if (status.contains("extinguished")) {
+                        setForeground(new Color(40, 140, 40));
+                        setBackground(new Color(40, 140, 40, 50));
+                    } else if (status.contains("dropping")) {
+                        setForeground(new Color(200, 120, 20));
+                    } else if (status.contains("dispatched")) {
+                        setForeground(new Color(50, 100, 200));
+                        setBackground(new Color(50, 100, 200, 50));
+                    } else if (status.contains("pending")) {
+                        setForeground(new Color(150, 150, 150));
+                        setBackground(new Color(150, 150, 150, 50));
+                    } else {
+                        setForeground(Color.BLACK);
+                        setBackground(Color.WHITE);
+                    }
+                    setFont(getFont().deriveFont(Font.BOLD));
+                }
+            }
+            return this;
         }
     }
 
