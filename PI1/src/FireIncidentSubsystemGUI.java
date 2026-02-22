@@ -548,6 +548,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
                         setBackground(new Color(40, 140, 40, 50));
                     } else if (status.contains("dropping")) {
                         setForeground(new Color(200, 120, 20));
+                        setBackground(new Color(200, 120, 20, 50));
                     } else if (status.contains("dispatched")) {
                         setForeground(new Color(50, 100, 200));
                         setBackground(new Color(50, 100, 200, 50));
