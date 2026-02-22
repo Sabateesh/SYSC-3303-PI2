@@ -15,6 +15,7 @@
 - `src/Message.java`
 - `src/Scheduler.java` (scheduler for the tasks)
 - `src/SchedulerServer.java`
+- `src/Zone.java` (zone class to keep track of individual zones)
 
 ## Detailed Instructions
 1. Open the project in IntelliJ Idea
@@ -23,7 +24,7 @@
 4. The program and GUI should start
 
 ## Responsibilities
-- Scheduling Logic (Faraaz)
-- Making GUI (Sabateesh)
-- Diagrams (Ibrahim)
-- Drone State Transitions (Aymen)
+- Scheduling Logic/Work on GUI (Faraaz)
+- Main GUI Development/Tests fpr DroneStateMachine (Sabateesh)
+- Making Diagrams/State Machine Planning (Ibrahim)
+- Drone State Transitions/GUI interaction setup (Aymen)

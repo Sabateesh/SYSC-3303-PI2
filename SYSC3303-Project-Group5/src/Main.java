@@ -4,8 +4,8 @@ import java.util.Queue;
 import javax.swing.*;
 public class Main {
     public static void main(String[] args) {
-        String eventPath = "PI1/Sample_event_file.csv";
-        String zonePath = "PI1/sample_zone_file.csv";
+        String eventPath = "SYSC3303-Project-Group5/Sample_event_file.csv";
+        String zonePath = "SYSC3303-Project-Group5/sample_zone_file.csv";
 
         Queue<Event> fromFire = new LinkedList<>();
         Queue<String> toFire = new LinkedList<>();
