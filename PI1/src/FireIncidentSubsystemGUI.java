@@ -37,7 +37,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
     private final List<Zone> zoneData;
     private final List<Drone> drones;
     private final List<Event> events;
-    
+
     private final Map<Integer,FireStatus> zoneFireStatus;
     private final Map<Integer,String> zoneSeverity;
     private final ZonesPanel zonesPanel;
@@ -181,10 +181,11 @@ public class FireIncidentSubsystemGUI extends JFrame {
 
     public void paintDrone(Drone d) {
         int r = drones.indexOf(d);
-        if(r!=-1) paintDrone(d, r);
-
-        zonesPanel.repaint();
-        refreshSummary();
+        if(r!=-1) SwingUtilities.invokeLater(()->{
+            paintDrone(d, r);
+            zonesPanel.repaint();
+            refreshSummary();
+        });
     }
 
     public void paintAllDrones() {
@@ -211,7 +212,10 @@ public class FireIncidentSubsystemGUI extends JFrame {
         eventTableModel.setValueAt(e.getEventType().toString(), r, 2);
         eventTableModel.setValueAt(e.getSeverity().toString(), r, 3);
 
-        if(e.isFireOut()) {
+        if(!e.isEventDelivered()) {
+            eventTableModel.setValueAt("Inactive", r, 4);
+            zoneFireStatus.put(e.getZoneID(), FireStatus.None);
+        } else if(e.isFireOut()) {
             eventTableModel.setValueAt("Extinguished", r, 4);
             zoneFireStatus.put(e.getZoneID(), FireStatus.Extinguished);
         } else {
@@ -224,10 +228,11 @@ public class FireIncidentSubsystemGUI extends JFrame {
 
     public void paintEvent(Event e) {
         int r = events.indexOf(e);
-        if(r!=-1) paintEvent(e, r);
-
-        zonesPanel.repaint();
-        refreshSummary();
+        if(r!=-1) {
+            SwingUtilities.invokeLater(()->paintEvent(e,r));
+            zonesPanel.repaint();
+            refreshSummary();
+        }
     }
 
     public void paintAllEvents() {

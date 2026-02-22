@@ -6,6 +6,7 @@ import java.util.List;
 
 public class FireIncidentSubsystem implements Runnable {
     private final Scheduler scheduler;
+    private final FireIncidentSubsystemGUI gui;
     private final List<Event> events;
     private final String eventpath;
     private final String threadName;
@@ -14,9 +15,17 @@ public class FireIncidentSubsystem implements Runnable {
     public FireIncidentSubsystem(String eventpath, Scheduler scheduler) {
         this.eventpath = eventpath;
         this.scheduler = scheduler;
+        this.gui=null;
         this.threadName = "FireIncidentSubsystem";
         this.events = new ArrayList<>();
+    }
 
+    public FireIncidentSubsystem(String eventpath, Scheduler scheduler, FireIncidentSubsystemGUI gui) {
+        this.eventpath = eventpath;
+        this.scheduler = scheduler;
+        this.gui = gui;
+        this.threadName = "FireIncidentSubsystem";
+        this.events = new ArrayList<>();
     }
 
     //load events
@@ -113,6 +122,9 @@ public class FireIncidentSubsystem implements Runnable {
                     return;
                 }
             }
+            event.deliverEvent();
+            if(gui!=null) gui.paintEvent(event);
+
             System.out.println("[" + threadName + "] Sending event: " + event);
             scheduler.sendEvent(event);
             previousTimeMills = currentTimeMills;

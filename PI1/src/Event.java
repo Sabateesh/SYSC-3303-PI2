@@ -23,6 +23,7 @@ public class Event implements Serializable {
     private final int zoneID;
     private final EventType eventType;
     private final Severity severity;
+    private boolean eventDelivered = false;
 
     private float waterLeft; //amount of water left to put out the fire
 
@@ -51,6 +52,7 @@ public class Event implements Serializable {
     public int getWaterRequired(){
         return severity.getWaterRequired();
     }
+    public boolean isEventDelivered() {return eventDelivered;}
 
     public float getWaterLeft(){
         return waterLeft;
@@ -59,6 +61,7 @@ public class Event implements Serializable {
         return getWaterLeft() <= 0;
     } //whether the fire is gone
 
+    public void deliverEvent() { eventDelivered = true; }
     public void useWater(float waterVolume) { //use water on a fire
         if(waterVolume >= getWaterLeft())
             waterLeft = 0;

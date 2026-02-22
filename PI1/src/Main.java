@@ -10,9 +10,9 @@ public class Main {
         Queue<Event> fromFire = new LinkedList<>();
         Queue<String> toFire = new LinkedList<>();
         Scheduler scheduler = new Scheduler(fromFire, toFire);
-        FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath, scheduler);
         List<Zone> zones = Zone.loadFromCSV(zonePath);
         FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI(zones);
+        FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath, scheduler, gui);
         DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler, zones, gui);
 
         SwingUtilities.invokeLater(() -> gui.setVisible(true));
