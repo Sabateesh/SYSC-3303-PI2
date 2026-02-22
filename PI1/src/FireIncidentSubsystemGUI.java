@@ -150,6 +150,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
     }
 
     public void paintDrone(Drone d, int r) {
+        if(r>droneTableModel.getRowCount()) droneTableModel.setRowCount(r+1);
         droneTableModel.setValueAt(d.getDroneName(), r, 0);
 
         DroneStateGui dsg;
@@ -203,7 +204,6 @@ public class FireIncidentSubsystemGUI extends JFrame {
     //register a drone so it appears in the table
     public void registerDrone(Drone drone){
         if(!drones.contains(drone)) drones.add(drone);
-        SwingUtilities.invokeLater(this::paintAllDrones);
     }
 
     public void paintEvent(Event e, int r) {

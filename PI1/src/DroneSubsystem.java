@@ -32,6 +32,7 @@ public class DroneSubsystem implements Runnable {
             drones.add(droneThread);
             droneThread.start();
         }
+        gui.paintAllDrones();
     }
 
     public Event requestTask() throws InterruptedException {
