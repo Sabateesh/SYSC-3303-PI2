@@ -176,7 +176,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         droneTableModel.setValueAt(d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base", r, 3);
         droneTableModel.setValueAt(d.batteryPercent(), r, 4);
 
-        droneMarkers.put(d.getDroneName(), new DroneMarker(d.getDroneName(),-1, DroneStateGui.IDLE));
+        droneMarkers.put(d.getDroneName(), new DroneMarker(d.getDroneName(), d.getCurrentZoneId(), dsg));
     }
 
     public void paintDrone(Drone d) {
