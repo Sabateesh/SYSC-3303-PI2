@@ -34,7 +34,7 @@ public class DroneStateMachine {
         this.ctx = new DroneContext(droneName);
     }
 
-    public synchronized DroneState getState(){
+    synchronized DroneState getState(){
         return state;
     }
 
@@ -43,7 +43,7 @@ public class DroneStateMachine {
         state = next;
     }
 
-    public synchronized void handleEvent(DroneEvent ev){
+    synchronized void handleEvent(DroneEvent ev){
         switch(state){
             case idle:
                 if (ev == DroneEvent.fireAssigned){

@@ -13,21 +13,13 @@ public class Main {
         FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath, scheduler);
         List<Zone> zones = Zone.loadFromCSV(zonePath);
         FireIncidentSubsystemGUI gui = new FireIncidentSubsystemGUI(zones);
-        DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler, zones);
+        DroneSubsystem droneSubsystem = new DroneSubsystem(scheduler, zones, gui);
 
         SwingUtilities.invokeLater(() -> gui.setVisible(true));
- 
-        //drone 0
-        gui.registerDrone("Drone-0", Drone.TANK_SIZE);
+
         fire.loadEvents();
-        for(Event event: fire.getEvents()) {
-            gui.addEvent(
-                event.getTime(),
-                event.getZoneID(),
-                event.getEventType().toString(),
-                event.getSeverity().toString()
-            );
-        }
+        for(Event event: fire.getEvents())
+            gui.addEvent(event);
         gui.setStatus("Simulation started");
 
         //start threads (one JVM, multiple threads)

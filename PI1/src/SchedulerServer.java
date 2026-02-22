@@ -1,7 +1,7 @@
 import java.util.Queue;
 
 public class SchedulerServer implements Runnable {
-    public static final int simulationSpeed = 1000; //1000 for real-time, do 10 or less to quickly test
+    public static final int simulationSpeed = 10; //1000 for real-time, do 10 or less to quickly test
 
     private final Queue<Event> fromFire;
     private final Queue<String> toFire;

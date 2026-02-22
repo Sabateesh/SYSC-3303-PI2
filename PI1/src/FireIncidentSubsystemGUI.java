@@ -4,15 +4,13 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 
 //GUI Scaffold
 public class FireIncidentSubsystemGUI extends JFrame {
      //drone states
-    public enum DroneState{
+    public enum DroneStateGui {
         IDLE("Idle", new Color(100,180,100)),
         InRoute("In Route", new Color(60,130,220)),
         DroppingAgent("Dropping Agent", new Color(220,140,40)),
@@ -20,7 +18,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         Refilling("Refilling", new Color(80,180,180));
         private final String label;
         private final Color color;
-        DroneState(String lable, Color color){
+        DroneStateGui(String lable, Color color){
             this.label = lable;
             this.color = color;
         }
@@ -37,6 +35,8 @@ public class FireIncidentSubsystemGUI extends JFrame {
     //zone map state
     private final List<ZoneRect> zones;
     private final List<Zone> zoneData;
+    private final List<Drone> drones;
+    private final List<Event> events;
     
     private final Map<Integer,FireStatus> zoneFireStatus;
     private final Map<Integer,String> zoneSeverity;
@@ -54,6 +54,9 @@ public class FireIncidentSubsystemGUI extends JFrame {
         setSize(1000, 650);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(8, 8));
+
+        this.drones = new LinkedList<>();
+        this.events = new LinkedList<>();
 
         //init state maps
         zoneFireStatus = new HashMap<>();
@@ -146,81 +149,101 @@ public class FireIncidentSubsystemGUI extends JFrame {
         add(statusLabel,BorderLayout.SOUTH);
     }
 
-    //register a drone so it appears in the table
-    public void registerDrone(String droneName, float waterCapacity){
-        SwingUtilities.invokeLater(() -> {
-            droneTableModel.addRow(new Object[]{
-                droneName,
-                DroneState.IDLE.getLabel(),
-                (int)(waterCapacity*ReservoirRenderer.precision),
-                "Base",
-                100
-            });
-            droneMarkers.put(droneName, new DroneMarker(droneName,-1,DroneState.IDLE));
-            refreshSummary();
-        });
-    }
-    //update drones state, watr lvl and assigned zone
-    public void updateDroneState(String droneName, DroneState state, float waterLevel, int zoneId){
-        SwingUtilities.invokeLater(() -> {
-            for(int r = 0; r < droneTableModel.getRowCount(); r++){
-                if(droneName.equals(droneTableModel.getValueAt(r, 0))){
-                    droneTableModel.setValueAt(state.getLabel(), r, 1);
-                    droneTableModel.setValueAt((int)(waterLevel*ReservoirRenderer.precision), r, 2);
-                    droneTableModel.setValueAt(zoneId > 0 ? "Zone " + zoneId : "Base", r, 3);
-                    break;
-                }
-            }
-            droneMarkers.put(droneName, new DroneMarker(droneName,zoneId,state));
-            zonesPanel.repaint();
-            refreshSummary();
-        });
-    }
-    public int addEvent(String time, int zoneId, String eventType, String severity) {
-        final int[] rowIdx = new int[1];
-        try {
-            if (SwingUtilities.isEventDispatchThread()) {
-                rowIdx[0] = addEventInternal(time, zoneId, eventType, severity);
-            } else {
-                SwingUtilities.invokeAndWait(() ->
-                        rowIdx[0] = addEventInternal(time, zoneId, eventType, severity));
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+    public void paintDrone(Drone d, int r) {
+        droneTableModel.setValueAt(d.getDroneName(), r, 0);
+
+        DroneStateGui dsg;
+        switch (d.getDroneState()) {
+            case DroneState.enRoute:
+                dsg = DroneStateGui.InRoute;
+                break;
+            case DroneState.droppingAgent:
+                dsg = DroneStateGui.DroppingAgent;
+                break;
+            case DroneState.returnForRefill:
+                dsg = DroneStateGui.Refilling;
+                break;
+            case DroneState.returnOrigin:
+                dsg = DroneStateGui.Returning;
+                break;
+            default:
+                dsg = DroneStateGui.IDLE;
+                break;
         }
-        return rowIdx[0];
+
+        droneTableModel.setValueAt(dsg.getLabel(), r, 1);
+        droneTableModel.setValueAt((int)(d.getWaterRemaining()*ReservoirRenderer.precision), r, 2);
+        droneTableModel.setValueAt(d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base", r, 3);
+        droneTableModel.setValueAt(d.batteryPercent(), r, 4);
+
+        droneMarkers.put(d.getDroneName(), new DroneMarker(d.getDroneName(),-1, DroneStateGui.IDLE));
     }
-    private int addEventInternal(String time, int zoneId, String eventType, String severity) {
-        eventTableModel.addRow(new Object[]{
-                time,
-                String.valueOf(zoneId),
-                eventType,
-                severity,
-                "Pending"
-        });
-        zoneFireStatus.put(zoneId, FireStatus.Active);
-        zoneSeverity.put(zoneId, severity);
+
+    public void paintDrone(Drone d) {
+        int r = drones.indexOf(d);
+        if(r!=-1) paintDrone(d, r);
+
         zonesPanel.repaint();
         refreshSummary();
-        return eventTableModel.getRowCount() - 1;
     }
 
-    //update status of event row
-    public void updateEventStatus(int rowIndex, String newStatus){
-        SwingUtilities.invokeLater(()->{
-            if(rowIndex >= 0 && rowIndex < eventTableModel.getRowCount()){
-                eventTableModel.setValueAt(newStatus, rowIndex, 4);
-            }
-        });
+    public void paintAllDrones() {
+        droneTableModel.setRowCount(drones.size());
+        droneMarkers.clear();
+
+        for(int r=0; r<drones.size(); r++) {
+            paintDrone(drones.get(r), r);
+        }
+
+        zonesPanel.repaint();
+        refreshSummary();
     }
 
-    //mark zone's fire as extringushed
-    public void setFireExtinguished(int zoneID){
-        SwingUtilities.invokeLater(()-> {
-            zoneFireStatus.put(zoneID, FireStatus.Extinguished);
-            zonesPanel.repaint();
-            refreshSummary();
-        });
+    //register a drone so it appears in the table
+    public void registerDrone(Drone drone){
+        if(!drones.contains(drone)) drones.add(drone);
+        SwingUtilities.invokeLater(this::paintAllDrones);
+    }
+
+    public void paintEvent(Event e, int r) {
+        eventTableModel.setValueAt(e.getTime(), r, 0);
+        eventTableModel.setValueAt(String.valueOf(e.getZoneID()), r, 1);
+        eventTableModel.setValueAt(e.getEventType().toString(), r, 2);
+        eventTableModel.setValueAt(e.getSeverity().toString(), r, 3);
+
+        if(e.isFireOut()) {
+            eventTableModel.setValueAt("Extinguished", r, 4);
+            zoneFireStatus.put(e.getZoneID(), FireStatus.Extinguished);
+        } else {
+            eventTableModel.setValueAt("Pending", r, 4);
+            zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
+            zoneSeverity.put(e.getZoneID(), e.getSeverity().toString());
+        }
+
+    }
+
+    public void paintEvent(Event e) {
+        int r = events.indexOf(e);
+        if(r!=-1) paintEvent(e, r);
+
+        zonesPanel.repaint();
+        refreshSummary();
+    }
+
+    public void paintAllEvents() {
+        eventTableModel.setRowCount(events.size());
+
+        for(int r=0; r<events.size(); r++) {
+            paintEvent(events.get(r), r);
+        }
+
+        zonesPanel.repaint();
+        refreshSummary();
+    }
+
+    public void addEvent(Event event) {
+        if(!events.contains(event)) events.add(event);
+        SwingUtilities.invokeLater(this::paintAllEvents);
     }
 
     //clear zones fire status
@@ -238,16 +261,15 @@ public class FireIncidentSubsystemGUI extends JFrame {
     }
     //internal helpers
     private void refreshSummary(){
-        long activeFires = zoneFireStatus.values().stream()
-            .filter(s -> s == FireStatus.Active).count();
+        long activeFires = events.stream().filter(e -> !e.isFireOut()).count();
         activeFiresLabel.setText("Active Fires:" + activeFires);
-        int total = droneTableModel.getRowCount();
+
+        int total = drones.size();
         long idle = 0, InRoute = 0 , dropping = 0;
-        for (int r = 0; r < total; r++) {
-            String state = (String) droneTableModel.getValueAt(r, 1);
-            if (DroneState.IDLE.getLabel().equals(state)) idle++;
-            else if (DroneState.InRoute.getLabel().equals(state)) InRoute++;
-            else if (DroneState.DroppingAgent.getLabel().equals(state)) dropping++;
+        for (Drone d : drones) {
+            if (d.getDroneState() == DroneState.idle) idle++;
+            if (d.getDroneState() == DroneState.enRoute) InRoute++;
+            if (d.getDroneState() == DroneState.droppingAgent) dropping++;
         }
         droneSummeryLabel.setText(String.format(
             "Drones: %d total | %d idle | %d en route | %d dropping", total, idle, InRoute, dropping));
@@ -285,7 +307,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
     private JPanel buildDroneLegend(){
         JPanel legend = new JPanel(new FlowLayout(FlowLayout.LEFT, 10,2));
         legend.setBackground(new Color(245,245,245));
-        for(DroneState ds : DroneState.values()){
+        for(DroneStateGui ds : DroneStateGui.values()){
             JLabel swatch = new JLabel("■ " + ds.getLabel());
             swatch.setForeground(ds.getColor());
             swatch.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
@@ -298,8 +320,8 @@ public class FireIncidentSubsystemGUI extends JFrame {
     static class DroneMarker{
         final String name;
         final int zoneId;
-        final DroneState state;
-        DroneMarker(String name,int zoneId,DroneState state){
+        final DroneStateGui state;
+        DroneMarker(String name, int zoneId, DroneStateGui state){
             this.name=name;
             this.zoneId=zoneId;
             this.state=state;
@@ -433,7 +455,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
             if (value != null) {
                 String label = value.toString();
-                for (DroneState ds : DroneState.values()) {
+                for (DroneStateGui ds : DroneStateGui.values()) {
                     if (ds.getLabel().equals(label)) {
                         c.setForeground(ds.getColor().darker());
                         setFont(getFont().deriveFont(Font.BOLD));
