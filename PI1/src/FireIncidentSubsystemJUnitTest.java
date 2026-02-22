@@ -58,34 +58,22 @@ public class FireIncidentSubsystemJUnitTest {
         Queue<String> toFire = new LinkedList<>();
         Scheduler scheduler = new Scheduler(fromFire, toFire);
         FireIncidentSubsystem fis = new FireIncidentSubsystem(csv.toString(), scheduler);
-        Thread simulator = new Thread(() -> {
+        Thread droneSim = new Thread(() -> {
             try {
-                int handled = 0;
-                while (handled < 2) {
-                    Event e;
-                    synchronized (fromFire) {
-                        while (fromFire.isEmpty()) {
-                            fromFire.wait();
-                        }
-                        e = fromFire.poll();
-                    }
-                    String msg = "Fire serviced: zone=" + e.getZoneID() + ", severity=" + e.getSeverity();
-                    synchronized (toFire) {
-                        toFire.offer(msg);
-                        toFire.notifyAll();
-                    }
-                    handled++;
+                for (int i = 0; i < 2; i++) {
+                    Event e = scheduler.requestTask();
+                    assertNotNull(e);
+                    scheduler.reportDone(e);
                 }
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             }
-        }, "PI1-Scheduler/Drone-Sim");
-        //run the FireIncidentSubsystem in a thread
+        }, "DroneSim");
         Thread fireThread = new Thread(fis, "FireIncidentSubsystem");
-        simulator.start();
+        droneSim.start();
         fireThread.start();
         fireThread.join();
-        simulator.join();
+        droneSim.join();
     }
     @SuppressWarnings("unchecked")
     private static List<Event> getPrivateEventsList(FireIncidentSubsystem fis) throws Exception {

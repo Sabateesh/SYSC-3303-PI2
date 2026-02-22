@@ -250,7 +250,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
             else if (DroneState.DroppingAgent.getLabel().equals(state)) dropping++;
         }
         droneSummeryLabel.setText(String.format(
-            "Drones: %d total | %d idle | %d en route | %d dropping", total, idle, InRoute, dropping));
+            "Drones: %d total | %d idle | %d in route | %d dropping", total, idle, InRoute, dropping));
     }
 
     //load zones from csv 
