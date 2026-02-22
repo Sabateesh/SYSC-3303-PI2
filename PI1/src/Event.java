@@ -18,13 +18,20 @@ public class Event implements Serializable {
             return waterRequired;
         }
     }
+    public enum State {
+        INACTIVE,
+        EXTINGUISHED,
+        PENDING,
+        DISPATCHED,
+        DROPPING
+    }
     //event attrib
     private final String time;
     private final int zoneID;
     private final EventType eventType;
     private final Severity severity;
-    private boolean eventDelivered = false;
 
+    private State curState;
     private float waterLeft; //amount of water left to put out the fire
 
     //event constr
@@ -34,6 +41,7 @@ public class Event implements Serializable {
         this.eventType = eventType;
         this.severity = severity;
         this.waterLeft = getWaterRequired();
+        this.curState = State.INACTIVE;
     }
 
     //getters
@@ -52,7 +60,7 @@ public class Event implements Serializable {
     public int getWaterRequired(){
         return severity.getWaterRequired();
     }
-    public boolean isEventDelivered() {return eventDelivered;}
+    public State currentState() {return curState;}
 
     public float getWaterLeft(){
         return waterLeft;
@@ -61,7 +69,7 @@ public class Event implements Serializable {
         return getWaterLeft() <= 0;
     } //whether the fire is gone
 
-    public void deliverEvent() { eventDelivered = true; }
+    public void deliverEvent(State newState) { curState = newState; }
     public void useWater(float waterVolume) { //use water on a fire
         if(waterVolume >= getWaterLeft())
             waterLeft = 0;

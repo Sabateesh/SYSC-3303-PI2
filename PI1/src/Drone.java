@@ -94,6 +94,8 @@ public class Drone implements Runnable {
                 switch(stateMachine.getState()) {
                     case DroneState.idle:
                         event = droneSubsystem.requestTask(); // blocks until work
+                        event.deliverEvent(Event.State.DISPATCHED);
+                        gui.paintEvent(event);
                         stateMachine.handleEvent(DroneEvent.fireAssigned);
                         break;
                     case DroneState.enRoute:
@@ -114,6 +116,9 @@ public class Drone implements Runnable {
                     case DroneState.droppingAgent: //TODO: ONLY EMPTY UNTIL BATTERY HAS JUST ENOUGH
                         System.out.println("[" + droneName + "] Servicing fire at zone " + event.getZoneID());
 
+                        event.deliverEvent(Event.State.DROPPING);
+                        gui.paintEvent(event);
+
                         float emptyAmount = event.getWaterLeft();
                         if(event.getWaterLeft() > getWaterRemaining())
                             emptyAmount = getWaterRemaining();
@@ -127,11 +132,18 @@ public class Drone implements Runnable {
                         if(event.isFireOut()) {
                             droneSubsystem.reportDone(event);
                             System.out.println("[" + droneName + "] Completed fire at zone " + event.getZoneID());
+
+                            event.deliverEvent(Event.State.EXTINGUISHED);
+                            gui.paintEvent(event);
+
                             this.event = null;
                             stateMachine.handleEvent(DroneEvent.jobFinished);
                         } else {
                             System.out.println("[" + droneName + "] Emptied " + emptyAmount + " L of water, going for refill");
                             stateMachine.handleEvent(DroneEvent.needRefill);
+
+                            event.deliverEvent(Event.State.DISPATCHED);
+                            gui.paintEvent(event);
                         }
                         break;
                     case DroneState.returnForRefill:
