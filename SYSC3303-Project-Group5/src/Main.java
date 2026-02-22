@@ -20,7 +20,7 @@ public class Main {
         fire.loadEvents();
         for(Event event: fire.getEvents())
             gui.addEvent(event);
-        gui.setStatus("Simulation started");
+        gui.setStatus(true);
 
         //start threads (one JVM, multiple threads)
         Thread schedulerThread = new Thread(scheduler, "Scheduler");
@@ -31,15 +31,22 @@ public class Main {
         fireThread.start();
         try {
             fireThread.join();
-            Thread.sleep(5000);
+
+            //wait until all drones are back at base station
+            synchronized (droneSubsystem.getCompletionLock()) {
+                while(!droneSubsystem.isAllDronesDone()) {
+                    droneSubsystem.getCompletionLock().wait();
+                }
+            }
             schedulerThread.interrupt();
             droneThread.interrupt();
+
             schedulerThread.join();
             droneThread.join();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        gui.setStatus("Simulation complete");
+        gui.setStatus(false);
 
     }
 }

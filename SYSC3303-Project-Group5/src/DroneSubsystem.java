@@ -13,6 +13,10 @@ public class DroneSubsystem implements Runnable {
     private final Queue<Event> fromFire;
     private volatile boolean running;
 
+    //completion lock for all drones back to base station
+    private int activeDrones = 0;
+    private final Object completionLock = new Object();
+
     public DroneSubsystem(SchedulerServer scheduler, List<Zone> zones, FireIncidentSubsystemGUI gui) {
         this.scheduler = scheduler;
         this.gui = gui;
@@ -32,7 +36,6 @@ public class DroneSubsystem implements Runnable {
             drones.add(droneThread);
             droneThread.start();
         }
-        gui.paintAllDrones();
     }
 
     public Event requestTask() throws InterruptedException {
@@ -40,14 +43,34 @@ public class DroneSubsystem implements Runnable {
             while (fromFire.isEmpty()) {
                 fromFire.wait();
             }
+            synchronized (completionLock) {
+                activeDrones++;
+            }
             return fromFire.poll();
         }
     }
 
-    public void reportDone(Event e) {
-        if (e == null) return;
-        gui.paintEvent(e);
-        scheduler.reportDone(e);
+    public void reportDone(Event event) {
+        if (event == null) return;
+        gui.paintEvent(event);
+        scheduler.reportDone(event);
+    }
+
+    public void reportToBase() {
+        synchronized (completionLock) {
+            activeDrones--;
+            if(activeDrones == 0 && fromFire.isEmpty())
+                completionLock.notifyAll();
+        }
+    }
+
+    public boolean isAllDronesDone() {
+        synchronized (completionLock) {
+            return activeDrones == 0 && fromFire.isEmpty();
+        }
+    }
+    public Object getCompletionLock() {
+        return completionLock;
     }
 
     @Override

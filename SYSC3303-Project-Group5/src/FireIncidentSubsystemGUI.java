@@ -35,8 +35,8 @@ public class FireIncidentSubsystemGUI extends JFrame {
     //zone map state
     private final List<ZoneRect> zones;
     private final List<Zone> zoneData;
-    private final List<Drone> drones;
-    private final List<Event> events;
+    private volatile List<Drone> drones;
+    private volatile List<Event> events;
 
     private final Map<Integer,FireStatus> zoneFireStatus;
     private final Map<Integer,String> zoneSeverity;
@@ -149,7 +149,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         add(statusLabel,BorderLayout.SOUTH);
     }
 
-    public void paintDrone(Drone d, int r) {
+    public synchronized void paintDrone(Drone d, int r) {
         if(r>droneTableModel.getRowCount()) droneTableModel.setRowCount(r+1);
         droneTableModel.setValueAt(d.getDroneName(), r, 0);
 
@@ -180,7 +180,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         droneMarkers.put(d.getDroneName(), new DroneMarker(d.getDroneName(), d.getCurrentZoneId(), dsg));
     }
 
-    public void paintDrone(Drone d) {
+    public synchronized void paintDrone(Drone d) {
         int r = drones.indexOf(d);
         if(r!=-1) SwingUtilities.invokeLater(()->{
             paintDrone(d, r);
@@ -189,7 +189,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         });
     }
 
-    public void paintAllDrones() {
+    public synchronized void paintAllDrones() {
         droneTableModel.setRowCount(drones.size());
         droneMarkers.clear();
 
@@ -202,11 +202,12 @@ public class FireIncidentSubsystemGUI extends JFrame {
     }
 
     //register a drone so it appears in the table
-    public void registerDrone(Drone drone){
+    public synchronized void registerDrone(Drone drone){
         if(!drones.contains(drone)) drones.add(drone);
+        SwingUtilities.invokeLater(this::paintAllDrones);
     }
 
-    public void paintEvent(Event e, int r) {
+    public synchronized void paintEvent(Event e, int r) {
         eventTableModel.setValueAt(e.getTime(), r, 0);
         eventTableModel.setValueAt(String.valueOf(e.getZoneID()), r, 1);
         eventTableModel.setValueAt(e.getEventType().toString(), r, 2);
@@ -242,7 +243,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
 
     }
 
-    public void paintEvent(Event e) {
+    public synchronized void paintEvent(Event e) {
         int r = events.indexOf(e);
         if(r!=-1) {
             SwingUtilities.invokeLater(()->paintEvent(e,r));
@@ -251,7 +252,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         }
     }
 
-    public void paintAllEvents() {
+    public synchronized void paintAllEvents() {
         eventTableModel.setRowCount(events.size());
 
         for(int r=0; r<events.size(); r++) {
@@ -262,23 +263,21 @@ public class FireIncidentSubsystemGUI extends JFrame {
         refreshSummary();
     }
 
-    public void addEvent(Event event) {
+    public synchronized void addEvent(Event event) {
         if(!events.contains(event)) events.add(event);
         SwingUtilities.invokeLater(this::paintAllEvents);
     }
 
-    //clear zones fire status
-    public void clearZoneFire(int zoneId){
-        SwingUtilities.invokeLater(()-> {
-            zoneFireStatus.put(zoneId,FireStatus.None);
-            zoneSeverity.remove(zoneId);
-            zonesPanel.repaint();
-            refreshSummary();
-        });
-    }
     //set bottom status bar
-    public void setStatus(String text){
-        SwingUtilities.invokeLater(()-> statusLabel.setText("Status:" + text));
+    public void setStatus(boolean status){
+        String text = status ? "▶ Simulation started" : "■ Simulation complete";
+        SwingUtilities.invokeLater(()-> {
+            statusLabel.setText(text);
+            if(status)
+                statusLabel.setForeground(new Color(36, 147, 0));
+            else
+                statusLabel.setForeground(new Color(147, 0, 0));
+        });
     }
     //internal helpers
     private void refreshSummary(){

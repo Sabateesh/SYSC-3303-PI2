@@ -15,7 +15,7 @@ public class FireIncidentSubsystem implements Runnable {
     public FireIncidentSubsystem(String eventpath, Scheduler scheduler) {
         this.eventpath = eventpath;
         this.scheduler = scheduler;
-        this.gui=null;
+        this.gui = null;
         this.threadName = "FireIncidentSubsystem";
         this.events = new ArrayList<>();
     }

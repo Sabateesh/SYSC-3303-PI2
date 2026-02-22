@@ -187,6 +187,7 @@ public class Drone implements Runnable {
                         setDroneFull();
 
                         stateMachine.handleEvent(DroneEvent.arrivedToOrigin);
+                        droneSubsystem.reportToBase();
                         break;
                     default:
                         System.out.println("[" + droneName + "] Unknown state");
