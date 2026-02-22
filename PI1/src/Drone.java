@@ -113,7 +113,7 @@ public class Drone implements Runnable {
                         }
                         stateMachine.handleEvent(DroneEvent.arrivedToFire);
                         break;
-                    case DroneState.droppingAgent: //TODO: ONLY EMPTY UNTIL BATTERY HAS JUST ENOUGH
+                    case DroneState.droppingAgent:
                         System.out.println("[" + droneName + "] Servicing fire at zone " + event.getZoneID());
 
                         event.deliverEvent(Event.State.DROPPING);
@@ -123,6 +123,19 @@ public class Drone implements Runnable {
                         if(event.getWaterLeft() > getWaterRemaining())
                             emptyAmount = getWaterRemaining();
                         float emptyTime = emptyAmount / DROP_RATE;
+
+                        //only drop until the drone must go back to the base to recharge
+                        try {
+                            Zone currentZone = Zone.getZoneFromId(zones, currentZoneId);
+                            //ensure that the drone doesnt get stranded by limiting emptying time
+                            if(emptyTime+timeToOrigin(currentZone) > batteryRemaining) {
+                                emptyTime = Math.max(batteryRemaining - timeToOrigin(currentZone), 0);
+                                emptyAmount = emptyTime * DROP_RATE;
+                            }
+                        } catch(Zone.UnknownZoneException e) {
+                            System.out.println("[" + droneName + "] Unknown zone " + currentZoneId);
+                        }
+
                         Thread.sleep((int)(emptyTime*60*SchedulerServer.simulationSpeed));
                         useUpBattery(emptyTime);
 
