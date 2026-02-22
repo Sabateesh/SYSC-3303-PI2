@@ -122,7 +122,7 @@ public class FireIncidentSubsystem implements Runnable {
                     return;
                 }
             }
-            event.deliverEvent();
+            event.deliverEvent(Event.State.PENDING);
             if(gui!=null) gui.paintEvent(event);
 
             System.out.println("[" + threadName + "] Sending event: " + event);

@@ -212,16 +212,32 @@ public class FireIncidentSubsystemGUI extends JFrame {
         eventTableModel.setValueAt(e.getEventType().toString(), r, 2);
         eventTableModel.setValueAt(e.getSeverity().toString(), r, 3);
 
-        if(!e.isEventDelivered()) {
-            eventTableModel.setValueAt("Inactive", r, 4);
-            zoneFireStatus.put(e.getZoneID(), FireStatus.None);
-        } else if(e.isFireOut()) {
-            eventTableModel.setValueAt("Extinguished", r, 4);
-            zoneFireStatus.put(e.getZoneID(), FireStatus.Extinguished);
-        } else {
-            eventTableModel.setValueAt("Pending", r, 4);
-            zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
-            zoneSeverity.put(e.getZoneID(), e.getSeverity().toString());
+        switch(e.currentState()) {
+            case Event.State.INACTIVE:
+                eventTableModel.setValueAt("Inactive", r, 4);
+                zoneFireStatus.put(e.getZoneID(), FireStatus.None);
+                break;
+            case Event.State.EXTINGUISHED:
+                eventTableModel.setValueAt("Extinguished", r, 4);
+                zoneFireStatus.put(e.getZoneID(), FireStatus.Extinguished);
+                break;
+            case Event.State.PENDING:
+                eventTableModel.setValueAt("Pending", r, 4);
+                zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
+                zoneSeverity.put(e.getZoneID(), e.getSeverity().toString());
+                break;
+            case Event.State.DROPPING:
+                eventTableModel.setValueAt("Dropping", r, 4);
+                zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
+                break;
+            case Event.State.DISPATCHED:
+                eventTableModel.setValueAt("Dispatched", r, 4);
+                zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
+                break;
+            default:
+                eventTableModel.setValueAt("Unknown", r, 4);
+                zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
+                break;
         }
 
     }
@@ -481,9 +497,9 @@ public class FireIncidentSubsystemGUI extends JFrame {
                 String status = value.toString().toLowerCase();
                 if (status.contains("extinguished")) {
                     c.setForeground(new Color(40, 140, 40));
-                } else if (status.contains("progress") || status.contains("dropping")) {
+                } else if (status.contains("dropping")) {
                     c.setForeground(new Color(200, 120, 20));
-                } else if (status.contains("dispatched") || status.contains("in route")) {
+                } else if (status.contains("dispatched")) {
                     c.setForeground(new Color(50, 100, 200));
                 } else if (status.contains("pending")) {
                     c.setForeground(new Color(150, 150, 150));
