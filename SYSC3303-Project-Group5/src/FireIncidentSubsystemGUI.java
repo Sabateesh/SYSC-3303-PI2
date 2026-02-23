@@ -55,6 +55,12 @@ public class FireIncidentSubsystemGUI extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(8, 8));
 
+        try {
+            UIManager.setLookAndFeel("javax.swing.plaf.metal.MetalLookAndFeel");
+        } catch (Exception e) {
+            System.out.println("Error occurred while changing JSwing MetalLookAndFeel");
+        }
+
         this.drones = new LinkedList<>();
         this.events = new LinkedList<>();
 

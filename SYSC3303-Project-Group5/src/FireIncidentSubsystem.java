@@ -107,6 +107,12 @@ public class FireIncidentSubsystem implements Runnable {
         //send events spaced out by timestamps
         long previousTimeMills = parseTimeToMillis(events.get(0).getTime());
 
+        try {
+            Thread.sleep(2000); //wait a while before starting simulation
+        } catch (InterruptedException e) {
+            System.out.println("[" + threadName + "] interrupted while waiting (prelim");
+        }
+
         //send all events to the scheduler
         for (Event event : events) {
             long currentTimeMills = parseTimeToMillis(event.getTime());
