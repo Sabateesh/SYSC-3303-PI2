@@ -1,4 +1,3 @@
-/out/
 .kotlin
 
 ### Eclipse ###
@@ -29,4 +28,6 @@ bin/
 
 .idea/
 out/
+lib/
+.ai/
 *.class
