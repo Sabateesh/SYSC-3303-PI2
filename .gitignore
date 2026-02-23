@@ -26,7 +26,6 @@ bin/
 .DS_Store
 
 
-.idea/
 out/
 lib/
 .ai/
