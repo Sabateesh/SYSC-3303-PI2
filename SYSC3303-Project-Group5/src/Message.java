@@ -8,7 +8,8 @@ public class Message implements Serializable {
         DISPATCH,       // Scheduler -> Drone (send event to execute)
         DONE,           // Drone -> Scheduler (finished event)
         ACK,            // Scheduler -> Fire (confirmation)
-        NO_TASK         // Scheduler -> Drone (nothing available)
+        NO_TASK,        // Scheduler -> Drone (nothing available)
+        DRONE_STATUS    // Drone -> Scheduler (status update)
     }
     private final Type type;
     private final Event event;

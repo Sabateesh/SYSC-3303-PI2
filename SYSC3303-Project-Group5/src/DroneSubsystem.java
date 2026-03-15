@@ -4,162 +4,100 @@ import java.util.*;
 
 public class DroneSubsystem implements Runnable {
 
-    private final SchedulerServer scheduler;
-    private final FireIncidentSubsystemGUI gui;
-    public final static int NUM_DRONES = 3;
-    private final List<Thread> drones;
-    private final List<Zone> zones;
-    private final Queue<Event> fromFire;
-    private volatile boolean running;
-
-    private int activeDrones = 0;
-    private final Object completionLock = new Object();
-
     private DatagramSocket socket;
-    private InetAddress schedulerAddress;
-    private int schedulerPort;
+    private final List<Zone> zones;
+    public final static int NUM_DRONES = 3;
+    private final List<Thread> droneThreads;
+    private final Queue<Event> taskQueue = new LinkedList<>();
+    private final Object taskLock = new Object();
 
-    public DroneSubsystem(String hostIP, int hostPort) throws Exception {
+    private static final int SCHEDULER_PORT = 5000;
+    private static final int DRONE_PORT = 5002;
+    private static final String HOST = "localhost";
 
-        schedulerAddress = InetAddress.getByName(hostIP);
-        schedulerPort = hostPort;
-
-        socket = new DatagramSocket();
-
+    public DroneSubsystem() throws Exception {
+        socket = new DatagramSocket(DRONE_PORT);
+        zones = Zone.loadFromCSV("SYSC3303-Project-Group5/sample_zone_file.csv");
+        droneThreads = new ArrayList<>();
         initializeDrones();
     }
 
     private void initializeDrones() {
-
         for(int i = 0; i < NUM_DRONES; i++) {
-
             String droneName = "Drone-" + i;
-
-            Drone drone = new Drone(this, droneName);
-
-            Thread droneThread = new Thread(drone);
-
+            Drone drone = new Drone(this, droneName, zones);
+            Thread droneThread = new Thread(drone, droneName);
             droneThreads.add(droneThread);
-
             droneThread.start();
         }
     }
 
-    public Event requestTask() throws InterruptedException {
+    private void sendMessage(Message msg) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream out = new ObjectOutputStream(bos);
+        out.writeObject(msg);
+        out.flush();
+        byte[] data = bos.toByteArray();
+        DatagramPacket packet = new DatagramPacket(data, data.length, InetAddress.getByName(HOST), SCHEDULER_PORT);
+        socket.send(packet);
+    }
 
-        synchronized(taskQueue) {
+    private Message receiveMessage() throws Exception {
+        byte[] buffer = new byte[4096];
+        DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+        socket.receive(packet);
+        ByteArrayInputStream bis = new ByteArrayInputStream(packet.getData(), 0, packet.getLength());
+        ObjectInputStream in = new ObjectInputStream(bis);
+        return (Message) in.readObject();
+    }
 
-            while(taskQueue.isEmpty())
-                taskQueue.wait();
-
-            synchronized(completionLock) {
-                activeDrones++;
+    public Event requestTask(String droneId) throws InterruptedException {
+        try {
+            sendMessage(new Message(Message.Type.REQUEST_TASK, null, droneId));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        synchronized (taskLock) {
+            while (taskQueue.isEmpty()) {
+                taskLock.wait();
             }
-
             return taskQueue.poll();
         }
     }
 
-    public void reportDone(Event event) {
-
-        try {
-
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            ObjectOutputStream out = new ObjectOutputStream(bos);
-
-            out.writeObject(event);
-            out.flush();
-
-            byte[] data = bos.toByteArray();
-
-            DatagramPacket packet =
-                    new DatagramPacket(data, data.length,
-                            schedulerAddress, schedulerPort);
-
-            socket.send(packet);
-
-        } catch(Exception e) {
-            e.printStackTrace();
-        }
+    public void reportDone(Event event, String droneId) throws Exception {
+        sendMessage(new Message(Message.Type.DONE, event, droneId));
     }
 
-    public void reportToBase() {
-
-        synchronized(completionLock) {
-
-            activeDrones--;
-
-            if(activeDrones == 0 && taskQueue.isEmpty())
-                completionLock.notifyAll();
-        }
+    public void sendStatus(String droneId, float battery, int zoneId, float water) throws Exception {
+        String note = droneId + "," + battery + "," + zoneId + "," + water;
+        sendMessage(new Message(Message.Type.DRONE_STATUS, null, note));
     }
 
     @Override
     public void run() {
-
-        System.out.println("[DroneSubsystem] Running");
-
-        byte[] buffer = new byte[4096];
-
-        while(running) {
-
-            try {
-
-                DatagramPacket packet =
-                        new DatagramPacket(buffer, buffer.length);
-
-                socket.receive(packet);
-
-                ByteArrayInputStream bis =
-                        new ByteArrayInputStream(packet.getData(), 0, packet.getLength());
-
-                ObjectInputStream in = new ObjectInputStream(bis);
-
-                Object obj = in.readObject();
-
-                if(obj instanceof Event) {
-
-                    Event event = (Event) obj;
-
-                    synchronized(taskQueue) {
-
-                        taskQueue.offer(event);
-                        taskQueue.notifyAll();
-                    }
-                }
-
-            } catch(Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public void sendJoin() {
-
+        System.out.println("[DroneSubsystem] Running on port " + DRONE_PORT);
         try {
-
-            String msg = "JOIN:DRONE_SUBSYSTEM";
-
-            byte[] data = msg.getBytes();
-
-            DatagramPacket packet =
-                    new DatagramPacket(data, data.length,
-                            schedulerAddress, schedulerPort);
-
-            socket.send(packet);
-
-        } catch(Exception e) {
+            while (!Thread.currentThread().isInterrupted()) {
+                Message msg = receiveMessage();
+                System.out.println("[DroneSubsystem] Received: " + msg);
+                if (msg.getType() == Message.Type.DISPATCH) {
+                    synchronized (taskLock) {
+                        taskQueue.offer(msg.getEvent());
+                        taskLock.notifyAll();
+                    }
+                } else if (msg.getType() == Message.Type.NO_TASK) {
+                    // Perhaps wait and retry, but for now, ignore
+                }
+            }
+        } catch (Exception e) {
             e.printStackTrace();
         }
+        socket.close();
     }
 
     public static void main(String[] args) throws Exception {
-
-        DroneSubsystem subsystem =
-                new DroneSubsystem("127.0.0.1", 5000);
-
-        subsystem.sendJoin();
-
+        DroneSubsystem subsystem = new DroneSubsystem();
         new Thread(subsystem).start();
     }
 }

@@ -24,10 +24,7 @@ public class FireIncidentSubsystemJUnitTest {
                         "14:03:15,3,FIRE_DETECTED,HIGH\n" +
                         "14:10:00,7,DRONE_REQUEST,MODERATE\n"
         );
-        Queue<Event> fromFire = new LinkedList<>();
-        Queue<String> toFire = new LinkedList<>();
-        Scheduler scheduler = new Scheduler(fromFire, toFire);
-        FireIncidentSubsystem fis = new FireIncidentSubsystem(csv.toString(), scheduler);
+        FireIncidentSubsystem fis = new FireIncidentSubsystem(csv.toString());
         fis.loadEvents();
         List<Event> events = getPrivateEventsList(fis);
         assertEquals(2, events.size());
@@ -44,36 +41,15 @@ public class FireIncidentSubsystemJUnitTest {
         assertEquals(Event.Severity.MODERATE, e1.getSeverity());
         assertEquals(20, e1.getWaterRequired());
     }
-    //Fire -> Scheduler (queue) -> "done" -> Fire confirmation
+    //Test time parsing
     @Test
-    @Timeout(10)
-    void run_sendsEvents_andReceivesConfirmations_roundTrip() throws Exception {
+    void parseTimeToMillis_parsesTimeStringsCorrectly() throws Exception {
         Path csv = tempDir.resolve("events.csv");
-        Files.writeString(csv,
-                "Time,Zone ID,Event type,Severity\n" +
-                        "10:00:00,1,FIRE_DETECTED,LOW\n" +
-                        "10:00:01,2,DRONE_REQUEST,HIGH\n"
-        );
-        Queue<Event> fromFire = new LinkedList<>();
-        Queue<String> toFire = new LinkedList<>();
-        Scheduler scheduler = new Scheduler(fromFire, toFire);
-        FireIncidentSubsystem fis = new FireIncidentSubsystem(csv.toString(), scheduler);
-        Thread droneSim = new Thread(() -> {
-            try {
-                for (int i = 0; i < 2; i++) {
-                    Event e = scheduler.requestTask();
-                    assertNotNull(e);
-                    scheduler.reportDone(e);
-                }
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            }
-        }, "DroneSim");
-        Thread fireThread = new Thread(fis, "FireIncidentSubsystem");
-        droneSim.start();
-        fireThread.start();
-        fireThread.join();
-        droneSim.join();
+        Files.writeString(csv, "Time,Zone ID,Event type,Severity\n14:03:15,3,FIRE_DETECTED,HIGH\n");
+        FireIncidentSubsystem fis = new FireIncidentSubsystem(csv.toString());
+        assertEquals(14*3600 + 3*60 + 15, fis.parseTimeToMillis("14:03:15"));
+        assertEquals(10*3600 + 0*60 + 0, fis.parseTimeToMillis("10:00:00"));
+        assertEquals(0, fis.parseTimeToMillis("invalid"));
     }
     @SuppressWarnings("unchecked")
     private static List<Event> getPrivateEventsList(FireIncidentSubsystem fis) throws Exception {
@@ -82,4 +58,3 @@ public class FireIncidentSubsystemJUnitTest {
         return (List<Event>) f.get(fis);
     }
 }
-

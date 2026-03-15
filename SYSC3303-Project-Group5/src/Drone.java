@@ -1,3 +1,5 @@
+import java.util.List;
+
 public class Drone implements Runnable {
     public static final float DROP_RATE = 2; //drop rate of water
     public static final float TANK_SIZE = 15; //tank size in liters
@@ -5,9 +7,6 @@ public class Drone implements Runnable {
     public static final float DRONE_SPEED = 2*60; //drone speed in units per minute
     public static final float REFILL_RATE = 5; //liters refilled per second at base
 
-    public static final float DROP_RATE = 2;
-    public static final float TANK_SIZE = 15;
-    public static final float BATTERY_SIZE = 50;
     private final DroneSubsystem droneSubsystem;
     private Event event;
     private boolean running = true;
@@ -20,10 +19,11 @@ public class Drone implements Runnable {
     private float waterRemaining;
     private float batteryRemaining;
     private final String droneName;
-    public Drone(DroneSubsystem droneSubsystem, String droneName) {
 
+    public Drone(DroneSubsystem droneSubsystem, String droneName, List<Zone> zones) {
         this.droneSubsystem = droneSubsystem;
         this.droneName = droneName;
+        this.zones = zones;
         this.stateMachine = new DroneStateMachine(droneName);
         this.waterRemaining = TANK_SIZE;
         this.batteryRemaining = BATTERY_SIZE;
@@ -73,17 +73,37 @@ public class Drone implements Runnable {
         batteryRemaining = BATTERY_SIZE;
     }
 
+    private float timeToZone(Zone dest) {
+        Zone origin = new Zone(0, 0, 0, 0, 0); // assume origin at 0,0
+        return Zone.getDistance(origin, dest) / DRONE_SPEED;
+    }
+
+    private float timeToOrigin(Zone from) {
+        Zone origin = new Zone(0, 0, 0, 0, 0);
+        return Zone.getDistance(from, origin) / DRONE_SPEED;
+    }
+
+    private void sendStatus() {
+        try {
+            droneSubsystem.sendStatus(droneName, batteryRemaining, currentZoneId, waterRemaining);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void run() {
+        sendStatus(); // initial status
         while(running) {
             try {
                 switch(stateMachine.getState()) {
-                    case DroneState.idle:
-                        event = droneSubsystem.requestTask();
+                    case idle:
+                        event = droneSubsystem.requestTask(droneName);
                         event.deliverEvent(Event.State.DISPATCHED);
                         stateMachine.handleEvent(DroneEvent.fireAssigned);
+                        sendStatus();
                         break;
-                    case DroneState.enRoute: {
+                    case enRoute: {
                         System.out.println("[" + droneName + "] Enroute to zone " + event.getZoneID());
                         targetZoneId = event.getZoneID();
                         float travelTime = 0;
@@ -94,9 +114,8 @@ public class Drone implements Runnable {
                         } catch (Zone.UnknownZoneException ex) {
                             System.out.println("[" + droneName + "] Zone does not exist " + event.getZoneID());
                         }
-                        lastAnimDurationMs = (long)(travelTime * 60 * SchedulerServer.simulationSpeed);
+                        lastAnimDurationMs = (long)(travelTime * 60 * Scheduler.simulationSpeed);
                         animStartTime = System.currentTimeMillis();
-                        gui.paintDrone(this);
                         if (destZone != null) {
                             System.out.println("[" + droneName + "] Travelling for " + travelTime * 60 + "s");
                             Thread.sleep(lastAnimDurationMs);
@@ -105,9 +124,10 @@ public class Drone implements Runnable {
                         }
                         targetZoneId = 0;
                         stateMachine.handleEvent(DroneEvent.arrivedToFire);
+                        sendStatus();
                         break;
                     }
-                    case DroneState.droppingAgent:
+                    case droppingAgent:
                         System.out.println("[" + droneName + "] Servicing fire at zone " + event.getZoneID());
                         event.deliverEvent(Event.State.DROPPING);
                         float emptyAmount = event.getWaterLeft();
@@ -120,7 +140,11 @@ public class Drone implements Runnable {
                         event.useWater(emptyAmount);
                         if(event.getWaterLeft() <= 0) {
                             System.out.println("[" + droneName + "] Fire extinguished");
-                            droneSubsystem.reportDone(event);
+                            try {
+                                droneSubsystem.reportDone(event, droneName);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
                             event.deliverEvent(Event.State.EXTINGUISHED);
                             event = null;
                             stateMachine.handleEvent(DroneEvent.jobFinished);
@@ -128,46 +152,44 @@ public class Drone implements Runnable {
                             System.out.println("[" + droneName + "] Tank empty, need refill");
                             stateMachine.handleEvent(DroneEvent.needRefill);
                         }
+                        sendStatus();
                         break;
-                    case DroneState.returnForRefill: {
+                    case returnForRefill: {
                         float travelTimeToRefill = 0;
                         try {
                             Zone currentZoneV = Zone.getZoneFromId(zones, currentZoneId);
                             travelTimeToRefill = timeToOrigin(currentZoneV);
                         } catch(Zone.UnknownZoneException e) { }
-                        lastAnimDurationMs = (long)(travelTimeToRefill * 60 * SchedulerServer.simulationSpeed);
+                        lastAnimDurationMs = (long)(travelTimeToRefill * 60 * Scheduler.simulationSpeed);
                         animStartTime = System.currentTimeMillis();
-                        gui.paintDrone(this);
                         System.out.println("[" + droneName + "] Travelling for " + travelTimeToRefill*60 + "s");
                         Thread.sleep(lastAnimDurationMs);
                         useUpBattery(travelTimeToRefill);
                         currentZoneId = 0;
                         float waterNeeded = TANK_SIZE - waterRemaining;
                         long refillMs = (long)((waterNeeded / REFILL_RATE) * 1000);
-                        gui.paintDrone(this);
                         System.out.println("[" + droneName + "] Refilling " + waterNeeded + "L at base");
                         Thread.sleep(refillMs);
                         setDroneFull();
                         stateMachine.handleEvent(DroneEvent.fireAssigned);
+                        sendStatus();
                         break;
                     }
-                    case DroneState.returnOrigin: {
+                    case returnOrigin: {
                         float travelTimeToOrigin = 0;
                         try {
                             Zone currentZoneV = Zone.getZoneFromId(zones, currentZoneId);
                             travelTimeToOrigin = timeToOrigin(currentZoneV);
                         } catch(Zone.UnknownZoneException e) { }
-                        lastAnimDurationMs = (long)(travelTimeToOrigin * 60 * SchedulerServer.simulationSpeed);
+                        lastAnimDurationMs = (long)(travelTimeToOrigin * 60 * Scheduler.simulationSpeed);
                         animStartTime = System.currentTimeMillis();
-                        gui.paintDrone(this);
                         System.out.println("[" + droneName + "] Travelling for " + travelTimeToOrigin*60 + "s");
                         Thread.sleep(lastAnimDurationMs);
                         useUpBattery(travelTimeToOrigin);
                         currentZoneId = 0;
                         setDroneFull();
                         stateMachine.handleEvent(DroneEvent.arrivedToOrigin);
-                        droneSubsystem.reportToBase();
-                        stateMachine.handleEvent(DroneEvent.arrivedToOrigin);
+                        sendStatus();
                         break;
                     }
                     default:
