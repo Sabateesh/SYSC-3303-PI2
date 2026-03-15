@@ -4,12 +4,13 @@ import java.util.*;
 
 public class DroneSubsystem implements Runnable {
 
-    private static final int NUM_DRONES = 1;
-
-    private final Queue<Event> taskQueue = new LinkedList<>();
-    private final List<Thread> droneThreads = new ArrayList<>();
-
-    private volatile boolean running = true;
+    private final SchedulerServer scheduler;
+    private final FireIncidentSubsystemGUI gui;
+    public final static int NUM_DRONES = 3;
+    private final List<Thread> drones;
+    private final List<Zone> zones;
+    private final Queue<Event> fromFire;
+    private volatile boolean running;
 
     private int activeDrones = 0;
     private final Object completionLock = new Object();

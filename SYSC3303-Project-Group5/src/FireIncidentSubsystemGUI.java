@@ -156,7 +156,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
     }
 
     public synchronized void paintDrone(Drone d, int r) {
-        if(r>droneTableModel.getRowCount()) droneTableModel.setRowCount(r+1);
+        if(r>=droneTableModel.getRowCount()) droneTableModel.setRowCount(r+1);
         droneTableModel.setValueAt(d.getDroneName(), r, 0);
 
         DroneStateGui dsg;
@@ -180,10 +180,56 @@ public class FireIncidentSubsystemGUI extends JFrame {
 
         droneTableModel.setValueAt(dsg.getLabel(), r, 1);
         droneTableModel.setValueAt((int)(d.getWaterRemaining()*ReservoirRenderer.precision), r, 2);
-        droneTableModel.setValueAt(d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base", r, 3);
+
+        // Show routing context in the Zone column
+        String zoneDisplay;
+        switch (d.getDroneState()) {
+            case DroneState.enRoute:
+                zoneDisplay = "→ Zone " + d.getTargetZoneId();
+                break;
+            case DroneState.returnOrigin:
+            case DroneState.returnForRefill:
+                zoneDisplay = (d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base") + " → Base";
+                break;
+            default:
+                zoneDisplay = d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base";
+                break;
+        }
+        droneTableModel.setValueAt(zoneDisplay, r, 3);
         droneTableModel.setValueAt(d.batteryPercent(), r, 4);
 
-        droneMarkers.put(d.getDroneName(), new DroneMarker(d.getDroneName(), d.getCurrentZoneId(), dsg));
+        final int baseSlotX = 20 + r * 20;
+        final int baseSlotY = 500;  
+        int fromPx = baseSlotX, fromPy = baseSlotY;
+        int toPx   = baseSlotX, toPy   = baseSlotY;
+        if (d.getDroneState() == DroneState.enRoute) {
+            if (d.getCurrentZoneId() > 0) {
+                for (ZoneRect z : zones) {
+                    if (z.id == d.getCurrentZoneId()) { fromPx = z.fireX(); fromPy = z.fireY(); break; }
+                }
+            } else {
+                fromPx = baseSlotX; fromPy = baseSlotY;
+            }
+            for (ZoneRect z : zones) {
+                if (z.id == d.getTargetZoneId()) { toPx = z.fireX(); toPy = z.fireY(); break; }
+            }
+        } else if (d.getDroneState() == DroneState.returnOrigin || d.getDroneState() == DroneState.returnForRefill) {
+            // from: current fire zone, to: the base station 
+            if (d.getCurrentZoneId() > 0) {
+                for (ZoneRect z : zones) {
+                    if (z.id == d.getCurrentZoneId()) { fromPx = z.fireX(); fromPy = z.fireY(); break; }
+                }
+            }
+            toPx = baseSlotX; toPy = baseSlotY;
+        } else if (d.getCurrentZoneId() > 0) {
+            for (ZoneRect z : zones) {
+                if (z.id == d.getCurrentZoneId()) { fromPx = toPx = z.fireX(); fromPy = toPy = z.fireY(); break; }
+            }
+        }
+        long animStart = d.getAnimStartTime();
+        droneMarkers.put(d.getDroneName(), new DroneMarker(
+                d.getDroneName(), d.getCurrentZoneId(), d.getTargetZoneId(), dsg,
+                fromPx, fromPy, toPx, toPy, animStart, d.getLastAnimDurationMs()));
     }
 
     public synchronized void paintDrone(Drone d) {
@@ -236,10 +282,12 @@ public class FireIncidentSubsystemGUI extends JFrame {
             case Event.State.DROPPING:
                 eventTableModel.setValueAt(new EventProgressRenderer.ProgressData((int)(((e.getWaterRequired()-e.getWaterLeft())*100)/e.getWaterRequired()), "Dropping"), r, 4);
                 zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
+                zoneSeverity.put(e.getZoneID(), e.getSeverity().toString());
                 break;
             case Event.State.DISPATCHED:
                 eventTableModel.setValueAt(new EventProgressRenderer.ProgressData((int)(((e.getWaterRequired()-e.getWaterLeft())*100)/e.getWaterRequired()), "Dispatched"), r, 4);
                 zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
+                zoneSeverity.put(e.getZoneID(), e.getSeverity().toString());
                 break;
             default:
                 eventTableModel.setValueAt(new EventProgressRenderer.ProgressData((int)(((e.getWaterRequired()-e.getWaterLeft())*100)/e.getWaterRequired()), "Unknown"), r, 4);
@@ -325,9 +373,9 @@ public class FireIncidentSubsystemGUI extends JFrame {
     List<ZoneRect> z = new ArrayList<>();
     for (Zone raw : zoneData) {
         int x = (int) (raw.x1 * scale) + padding;
-        int y = (int) (raw.y1 * scale) + padding;
-        int w = (int) ((raw.x2 - raw.x1) * scale);
         int h = (int) ((raw.y2 - raw.y1) * scale);
+        int y = panelH - padding - (int)(raw.y2 * scale);  
+        int w = (int) ((raw.x2 - raw.x1) * scale);
         z.add(new ZoneRect(raw.id, x, y, w, h));
     }
     System.out.println("[GUI] loaded " + z.size() + " zones");
@@ -346,16 +394,42 @@ public class FireIncidentSubsystemGUI extends JFrame {
         return legend;
     }
 
-    //marker data for drowing a drone on the zone map
-    static class DroneMarker{
+    //marker data for drawing a drone on the zone map
+    static class DroneMarker {
         final String name;
         final int zoneId;
+        final int targetZoneId;
         final DroneStateGui state;
-        DroneMarker(String name, int zoneId, DroneStateGui state){
-            this.name=name;
-            this.zoneId=zoneId;
-            this.state=state;
+        final int fromPixelX, fromPixelY;
+        final int toPixelX,   toPixelY;
+        final long animStartTime;
+        final long animDurationMs;
+
+        DroneMarker(String name, int zoneId, int targetZoneId, DroneStateGui state,
+                    int fromPixelX, int fromPixelY, int toPixelX, int toPixelY,
+                    long animStartTime, long animDurationMs) {
+            this.name = name;
+            this.zoneId = zoneId;
+            this.targetZoneId = targetZoneId;
+            this.state = state;
+            this.fromPixelX = fromPixelX;
+            this.fromPixelY = fromPixelY;
+            this.toPixelX = toPixelX;
+            this.toPixelY = toPixelY;
+            this.animStartTime = animStartTime;
+            this.animDurationMs = animDurationMs;
         }
+
+        float animProgress() {
+            boolean moving = state == DroneStateGui.InRoute
+                    || state == DroneStateGui.Returning
+                    || state == DroneStateGui.Refilling;
+            if (!moving || animDurationMs <= 0) return 1f;
+            float t = (System.currentTimeMillis() - animStartTime) / (float) animDurationMs;
+            return Math.min(1f, Math.max(0f, t));
+        }
+        int currentPixelX() { return (int)(fromPixelX + (toPixelX - fromPixelX) * animProgress()); }
+        int currentPixelY() { return (int)(fromPixelY + (toPixelY - fromPixelY) * animProgress()); }
     }
     //rectangles representing a zone on the map
     static class ZoneRect{
@@ -369,6 +443,17 @@ public class FireIncidentSubsystemGUI extends JFrame {
         }
         int centreX(){return x+w/2;}
         int centreY(){return y+h/2;}
+        int fireX() {
+            Random r = new Random(id * 9371L);
+            int margin = 22;
+            return x + margin + r.nextInt(Math.max(1, w - 2 * margin));
+        }
+        int fireY() {
+            Random r = new Random(id * 9371L);
+            r.nextInt(); // skip x value
+            int margin = 22;
+            return y + margin + r.nextInt(Math.max(1, h - 2 * margin));
+        }
     }
     //zone map panel
        static class ZonesPanel extends JPanel {
@@ -387,94 +472,209 @@ public class FireIncidentSubsystemGUI extends JFrame {
             this.drones = drones;
             setBackground(Color.WHITE);
             setPreferredSize(new Dimension(560, 560));
+            new javax.swing.Timer(50, e -> repaint()).start();
         }
        @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(new Color(235, 235, 235));
+            // earthy background
+            g2.setColor(new Color(210, 200, 175));
+            g2.fillRect(0, 0, getWidth(), getHeight());
+            g2.setColor(new Color(195, 185, 160));
             for (int x = 0; x < getWidth(); x += 25) g2.drawLine(x, 0, x, getHeight());
             for (int y = 0; y < getHeight(); y += 25) g2.drawLine(0, y, getWidth(), y);
 
-            //draw zones
+            // river winding down the right side of the map
+            java.awt.geom.GeneralPath riverPath = new java.awt.geom.GeneralPath();
+            riverPath.moveTo(455, 0);
+            riverPath.curveTo(480, 70,  430, 130, 460, 200);
+            riverPath.curveTo(490, 270, 440, 320, 465, 390);
+            riverPath.curveTo(490, 450, 445, 490, 460, 560);
+            // draw river bank (wide, lighter)
+            g2.setColor(new Color(160, 200, 230, 180));
+            g2.setStroke(new BasicStroke(18f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.draw(riverPath);
+            // draw river water (narrower, darker)
+            g2.setColor(new Color(90, 155, 210, 210));
+            g2.setStroke(new BasicStroke(10f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.draw(riverPath);
+            // river shimmer highlights
+            g2.setColor(new Color(200, 230, 255, 120));
+            g2.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.draw(riverPath);
+
+            //draw zones as forested land
             for (ZoneRect z : zones) {
                 FireStatus fs = fireStatus.getOrDefault(z.id, FireStatus.None);
-                switch (fs) {
-                    case Active:
-                        g2.setColor(new Color(255, 200, 200));   
-                        break;
-                    case Extinguished:
-                        g2.setColor(new Color(200, 255, 200));   
-                        break;
-                    default:
-                        g2.setColor(new Color(200, 220, 255));  
-                        break;
-                }
-                g2.fillRect(z.x, z.y, z.w, z.h);
+                drawForest(g2, z, fs);
 
+                // border
                 Color borderColor;
                 switch (fs) {
-                    case Active:      borderColor = new Color(200, 50, 50);  break;
-                    case Extinguished: borderColor = new Color(50, 160, 50); break;
-                    default:          borderColor = new Color(60, 90, 160);  break;
+                    case Active:       borderColor = new Color(180, 50, 20);  break;
+                    case Extinguished: borderColor = new Color(80, 90, 70);   break;
+                    default:           borderColor = new Color(60, 110, 50);  break;
                 }
                 g2.setColor(borderColor);
                 g2.setStroke(new BasicStroke(2f));
                 g2.drawRect(z.x, z.y, z.w, z.h);
 
-                // Zone label
-                g2.setColor(Color.BLACK);
+                // Zone label (white shadow for readability)
                 g2.setFont(getFont().deriveFont(Font.BOLD, 13f));
+                g2.setColor(new Color(0,0,0,80));
+                g2.drawString("Z(" + z.id + ")", z.x + 7, z.y + 19);
+                g2.setColor(Color.WHITE);
                 g2.drawString("Z(" + z.id + ")", z.x + 6, z.y + 18);
 
-                // Fire indicator icon
+                // Fire indicator icon — position matches drone destination
                 if (fs == FireStatus.Active) {
-                    g2.setColor(new Color(220, 50, 30));
-                    g2.setFont(getFont().deriveFont(Font.BOLD, 18f));
-                    g2.drawString("🔥", z.x + z.w - 30, z.y + 22);
-                    // Severity label
+                    int fx = z.fireX(), fy = z.fireY();
+                    g2.setFont(getFont().deriveFont(Font.BOLD, 20f));
+                    g2.drawString("🔥", fx - 10, fy + 8);
                     String sev = severity.getOrDefault(z.id, "");
                     if (!sev.isEmpty()) {
-                        g2.setFont(getFont().deriveFont(Font.PLAIN, 11f));
-                        g2.setColor(new Color(160, 30, 30));
+                        g2.setFont(getFont().deriveFont(Font.BOLD, 11f));
+                        g2.setColor(new Color(255, 240, 200));
                         g2.drawString(sev, z.x + 6, z.y + 34);
                     }
                 } else if (fs == FireStatus.Extinguished) {
-                    g2.setColor(new Color(40, 140, 40));
                     g2.setFont(getFont().deriveFont(Font.BOLD, 11f));
-                    g2.drawString("✓ Extinguished", z.x + 6, z.y + 34);
+                    g2.setColor(new Color(220, 240, 210));
+                    g2.drawString("✓ Out", z.x + 6, z.y + 34);
                 }
             }
-            // draw drone markers
-            int droneOffset = 0;
+            // draw flight-path lines (en-route = blue, returning = purple)
             for (DroneMarker dm : drones.values()) {
-                ZoneRect target = null;
-                if (dm.zoneId > 0) {
-                    for (ZoneRect z : zones) {
-                        if (z.id == dm.zoneId) { target = z; break; }
-                    }
-                }
-                int dx, dy;
-                if (target != null) {
-                    dx = target.centreX() + droneOffset * 25 - 10;
-                    dy = target.y + target.h - 28;
-                } else {
-                    dx = 15 + droneOffset * 65;
-                    dy = getHeight() - 35;
-                }
-                g2.setColor(dm.state.getColor());
-                g2.fillRoundRect(dx, dy, 50, 20, 8, 8);
-                g2.setColor(Color.BLACK);
+                boolean enRoute  = dm.state == DroneStateGui.InRoute;
+                boolean returning = dm.state == DroneStateGui.Returning || dm.state == DroneStateGui.Refilling;
+                if (!enRoute && !returning) continue;
+                Color lineColor = enRoute ? new Color(60, 130, 220, 180) : new Color(150, 90, 200, 160);
+                g2.setColor(lineColor);
+                g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
+                        0, new float[]{8, 5}, 0));
+                g2.drawLine(dm.fromPixelX, dm.fromPixelY, dm.toPixelX, dm.toPixelY);
+                // arrowhead at destination end
+                double angle = Math.atan2(dm.toPixelY - dm.fromPixelY, dm.toPixelX - dm.fromPixelX);
+                int ax = dm.toPixelX, ay = dm.toPixelY;
+                int[] arrowX = {ax, ax-(int)(12*Math.cos(angle-0.4)), ax-(int)(12*Math.cos(angle+0.4))};
+                int[] arrowY = {ay, ay-(int)(12*Math.sin(angle-0.4)), ay-(int)(12*Math.sin(angle+0.4))};
                 g2.setStroke(new BasicStroke(1f));
-                g2.drawRoundRect(dx, dy, 50, 20, 8, 8);
-                g2.setFont(getFont().deriveFont(Font.BOLD, 10f));
-                g2.setColor(Color.WHITE);
-                String shortName = dm.name.replaceAll("[^0-9]", "");
-                g2.drawString("D(" + shortName + ")", dx + 5, dy + 14);
-                droneOffset++;
+                g2.setColor(lineColor);
+                g2.fillPolygon(arrowX, arrowY, 3);
+            }
+
+            for (DroneMarker dm : drones.values()) {
+                if (dm.state != DroneStateGui.DroppingAgent) continue;
+                long t = System.currentTimeMillis();
+                int cx = dm.toPixelX, cy = dm.toPixelY;
+                for (int i = 0; i < 4; i++) {
+                    float phase = ((t + i * 200) % 800) / 800f;
+                    int dropX = cx - 7 + (i % 2) * 9;
+                    int dropY = cy + 12 + (int)(phase * 22);
+                    int alpha = (int)(200 * (1f - phase));
+                    int size  = Math.max(2, 7 - (int)(phase * 4));
+                    g2.setColor(new Color(40, 120, 220, alpha));
+                    g2.fillOval(dropX - size / 2, dropY, size, size);
+                }
+            }
+
+            for (DroneMarker dm : drones.values()) {
+                int cx = dm.currentPixelX();
+                int cy = dm.currentPixelY();
+                String shortName = "D" + dm.name.replaceAll("[^0-9]", "");
+                String label = dm.state == DroneStateGui.InRoute
+                        ? shortName + "→" + dm.targetZoneId
+                        : shortName;
+                drawDroneIcon(g2, cx, cy, dm.state.getColor(), label);
             }
             g2.dispose();
+        }
+
+        /** Fill a zone with a forest floor and scattered pine trees */
+        private void drawForest(Graphics2D g2, ZoneRect z, FireStatus fs) {
+            Color ground;
+            switch (fs) {
+                case Active:       ground = new Color(200, 150, 100); break;
+                case Extinguished: ground = new Color(110, 115, 95);  break;
+                default:           ground = new Color(120, 175, 85);  break;
+            }
+            g2.setColor(ground);
+            g2.fillRect(z.x, z.y, z.w, z.h);
+
+            // posRng drives positions only — never used for color so positions never shift
+            Random posRng = new Random(z.id * 6791L);
+            Random colRng = new Random(z.id * 3137L);
+            int margin = 14;
+            int treeCount = 7;
+            int fx = z.fireX(), fy = z.fireY();
+            for (int i = 0; i < treeCount; i++) {
+                int tx = z.x + margin + posRng.nextInt(Math.max(1, z.w - 2 * margin));
+                int ty = z.y + margin + posRng.nextInt(Math.max(1, z.h - 2 * margin));
+                double dist = Math.sqrt((tx - fx) * (tx - fx) + (ty - fy) * (ty - fy));
+                boolean nearFire = dist < 38;
+                Color canopy;
+                if (fs == FireStatus.Active && nearFire) {
+                    canopy = new Color(210 + colRng.nextInt(40), 70 + colRng.nextInt(50), 10);
+                } else if (fs == FireStatus.Extinguished && nearFire) {
+                    canopy = new Color(30, 28, 25); // black charred stumps
+                } else {
+                    int gr = 110 + colRng.nextInt(60);
+                    canopy = new Color(25 + colRng.nextInt(30), gr, 20 + colRng.nextInt(25));
+                }
+                drawTree(g2, tx, ty, canopy);
+            }
+        }
+
+        /** Draw a small pine tree centred at (cx, cy) */
+        private void drawTree(Graphics2D g2, int cx, int cy, Color canopy) {
+            g2.setColor(new Color(110, 75, 40));
+            g2.fillRect(cx - 2, cy + 3, 4, 6);
+            int[] px1 = {cx, cx - 8, cx + 8};
+            int[] py1 = {cy - 10, cy + 4, cy + 4};
+            int[] px2 = {cx, cx - 6, cx + 6};
+            int[] py2 = {cy - 16, cy - 4, cy - 4};
+            g2.setColor(canopy);
+            g2.fillPolygon(px1, py1, 3);
+            g2.fillPolygon(px2, py2, 3);
+            g2.setColor(canopy.darker());
+            g2.setStroke(new BasicStroke(0.5f));
+            g2.drawPolygon(px1, py1, 3);
+        }
+
+        private void drawDroneIcon(Graphics2D g2, int cx, int cy, Color color, String label) {
+            int arm = 11;
+            int rw = 14, rh = 7;
+            g2.setColor(new Color(70, 70, 70));
+            g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(cx - arm, cy - arm, cx + arm, cy + arm);
+            g2.drawLine(cx + arm, cy - arm, cx - arm, cy + arm);
+            int[][] rp = {
+                {cx - arm - rw/2, cy - arm - rh/2},
+                {cx + arm - rw/2, cy - arm - rh/2},
+                {cx - arm - rw/2, cy + arm - rh/2},
+                {cx + arm - rw/2, cy + arm - rh/2}
+            };
+            for (int[] r : rp) {
+                g2.setColor(new Color(210, 210, 210, 210));
+                g2.fillOval(r[0], r[1], rw, rh);
+                g2.setColor(new Color(100, 100, 100));
+                g2.setStroke(new BasicStroke(0.8f));
+                g2.drawOval(r[0], r[1], rw, rh);
+            }
+            g2.setColor(color);
+            g2.fillOval(cx - 8, cy - 8, 16, 16);
+            g2.setColor(color.darker());
+            g2.setStroke(new BasicStroke(1.5f));
+            g2.drawOval(cx - 8, cy - 8, 16, 16);
+            g2.setFont(getFont().deriveFont(Font.BOLD, 9f));
+            FontMetrics fm = g2.getFontMetrics();
+            int lw = fm.stringWidth(label);
+            g2.setColor(new Color(30, 30, 30, 200));
+            g2.fillRoundRect(cx - lw/2 - 2, cy + 10, lw + 4, 11, 4, 4);
+            g2.setColor(Color.WHITE);
+            g2.drawString(label, cx - lw/2, cy + 19);
         }
     }
     //cell renderer for drone state column
