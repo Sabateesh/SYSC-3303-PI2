@@ -7,6 +7,7 @@ public class Message implements Serializable {
         REQUEST_TASK,   // Drone -> Scheduler (ask for work)
         DISPATCH,       // Scheduler -> Drone (send event to execute)
         DONE,           // Drone -> Scheduler (finished event)
+        PARTIAL_DONE,   // Drone -> Scheduler (partially finished event)
         ACK,            // Scheduler -> Fire (confirmation)
         NO_TASK,        // Scheduler -> Drone (nothing available)
         DRONE_STATUS    // Drone -> Scheduler (status update)

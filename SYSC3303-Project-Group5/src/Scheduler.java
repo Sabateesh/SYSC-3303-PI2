@@ -8,7 +8,9 @@ public class Scheduler implements Runnable {
 
     private final List<Event> events = new LinkedList<>();
     private final Map<String, DroneStatus> droneStatuses = new HashMap<>();
+    private FireIncidentSubsystemGUI gui;
     private int nextDroneIndex = 0;
+    private final Queue<String> requestingDrones = new LinkedList<>();
 
     private static final int SCHEDULER_PORT = 5000;
     private static final int FIRE_PORT = 5001;
@@ -54,36 +56,52 @@ public class Scheduler implements Runnable {
         System.out.println("[Scheduler] Scheduler stopped");
     }
 
+    public void setGui(FireIncidentSubsystemGUI gui) {
+        this.gui = gui;
+    }
+
     private void handleMessage(Message msg) throws Exception {
         switch (msg.getType()) {
             case EVENT:
                 events.add(msg.getEvent());
                 sendMessage(new Message(Message.Type.ACK, null, "Event received"), FIRE_PORT);
+                if (gui != null) gui.addEvent(msg.getEvent());
+                assignTasks();
                 break;
             case REQUEST_TASK:
-                String droneId = msg.getNote();
-                if (!events.isEmpty()) {
-                    Event event = events.remove(0);
-                    sendMessage(new Message(Message.Type.DISPATCH, event, droneId), DRONE_PORT);
-                } else {
-                    sendMessage(new Message(Message.Type.NO_TASK, null, droneId), DRONE_PORT);
-                }
+                requestingDrones.add(msg.getNote());
+                assignTasks();
                 break;
             case DONE:
                 // Assume DONE has event, send ACK to fire
                 sendMessage(new Message(Message.Type.ACK, null, "Done: " + msg.getEvent()), FIRE_PORT);
+                if (gui != null) gui.updateEvent(msg.getEvent());
+                break;
+            case PARTIAL_DONE:
+                // Assume PARTIAL_DONE has event, send ACK to fire
+                sendMessage(new Message(Message.Type.ACK, null, "Partial Done: " + msg.getEvent()), FIRE_PORT);
+                if (gui != null) gui.updateEvent(msg.getEvent());
                 break;
             case DRONE_STATUS:
-                // note: "droneId,battery,zoneId,water"
+                // note: "droneId,battery,zoneId,water,targetZoneId,lastAnim,animStart"
                 String[] parts = msg.getNote().split(",");
                 String id = parts[0];
                 float battery = Float.parseFloat(parts[1]);
                 int zone = Integer.parseInt(parts[2]);
                 float water = Float.parseFloat(parts[3]);
                 droneStatuses.put(id, new DroneStatus(battery, zone, water));
+                if (gui != null) gui.updateDrone(msg.getNote());
                 break;
             default:
                 System.out.println("[Scheduler] Unknown message type: " + msg.getType());
+        }
+    }
+
+    private void assignTasks() throws Exception {
+        while (!events.isEmpty() && !requestingDrones.isEmpty()) {
+            String droneId = requestingDrones.poll();
+            Event event = events.remove(0);
+            sendMessage(new Message(Message.Type.DISPATCH, event, droneId), DRONE_PORT);
         }
     }
 
@@ -92,9 +110,5 @@ public class Scheduler implements Runnable {
         int zoneId;
         float water;
         DroneStatus(float b, int z, float w) { battery = b; zoneId = z; water = w; }
-    }
-
-    public static void main(String[] args) throws Exception {
-        new Thread(new Scheduler()).start();
     }
 }
