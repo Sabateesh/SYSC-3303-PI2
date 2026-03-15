@@ -6,7 +6,7 @@ import java.util.Queue;
 public class DroneSubsystem implements Runnable {
 
     private final SchedulerServer scheduler;
-    private final static int NUM_DRONES = 3;
+    public final static int NUM_DRONES = 3;
     private final List<Thread> drones;
     private final Queue<Event> fromFire;
     private volatile boolean running;

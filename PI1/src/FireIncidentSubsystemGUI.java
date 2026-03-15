@@ -3,6 +3,9 @@ import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -66,7 +69,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         JPanel rightpPanel = new JPanel(new GridLayout(2,1,8,8));
         
         //drone table
-        String[] droneCols = {"Drone", "State", "Water (L)", "Zone"};
+        String[] droneCols = {"Drone", "State", "Water (L)", "Assigned Zone", "Severity"};
         droneTableModel = new DefaultTableModel(droneCols, 0){
             @Override
             public boolean isCellEditable(int row, int col){
@@ -77,6 +80,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         droneTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN,12));
         droneTable.setRowHeight(22);
         droneTable.getColumnModel().getColumn(1).setCellRenderer(new DroneStateCellRenderer());
+        droneTable.getColumnModel().getColumn(4).setCellRenderer(new SeverityCellRenderer());
         JPanel dronesPanel = new JPanel(new BorderLayout(6, 6));
         dronesPanel.setBorder(new TitledBorder("Drones"));
         dronesPanel.add(new JScrollPane(droneTable), BorderLayout.CENTER);
@@ -135,28 +139,30 @@ public class FireIncidentSubsystemGUI extends JFrame {
                 droneName,
                 DroneState.IDLE.getLabel(),
                 String.format("%.1f", waterCapacity),
-                "Base"
+                "Base",
+                "–"
             });
             droneMarkers.put(droneName, new DroneMarker(droneName,-1,DroneState.IDLE));
             refreshSummary();
         });
     }
-    //update drones state, watr lvl and assigned zone
-    public void updateDroneState(String droneName, DroneState state, double waterLevel, int zoneId){
+    //update drone state, water level, assigned zone and severity
+    public void updateDroneState(String droneName, DroneState state, double waterLevel, int zoneId, String severity){
         SwingUtilities.invokeLater(() -> {
             for(int r = 0; r < droneTableModel.getRowCount(); r++){
                 if(droneName.equals(droneTableModel.getValueAt(r, 0))){
                     droneTableModel.setValueAt(state.getLabel(), r, 1);
                     droneTableModel.setValueAt(String.format("%.1f", waterLevel), r, 2);
                     droneTableModel.setValueAt(zoneId > 0 ? "Zone " + zoneId : "Base", r, 3);
+                    droneTableModel.setValueAt(severity != null ? severity : "–", r, 4);
                     break;
                 }
             }
             droneMarkers.put(droneName, new DroneMarker(droneName,zoneId,state));
             zonesPanel.repaint();
             refreshSummary();
-    }); 
-}
+        });
+    }
 public int addEvent(String time, int zoneId, String eventType, String severity) {
         final int[] rowIdx = new int[1];
         try {
@@ -234,14 +240,52 @@ public int addEvent(String time, int zoneId, String eventType, String severity) 
             "Drones: %d total | %d idle | %d en route | %d dropping", total, idle, InRoute, dropping));
     }
 
-    //load zones 
+    //load zones from CSV file 
     private List<ZoneRect> loadZones() {
         List<ZoneRect> z = new ArrayList<>();
-        z.add(new ZoneRect(1, 30, 30, 240, 160));
-        z.add(new ZoneRect(2, 290, 30, 230, 160));
-        z.add(new ZoneRect(3, 30, 210, 240, 160));
-        z.add(new ZoneRect(4, 290, 210, 230, 160));
-        z.add(new ZoneRect(5, 160, 390, 230, 130));
+        String zonePath = "PI1/zone_file.csv";
+        List<int[]> raw = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(zonePath))) {
+            String line;
+            boolean header = true;
+            while ((line = br.readLine()) != null) {
+                if (header) { header = false; continue; }
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                String[] p = line.split(",");
+                if (p.length < 5) continue;
+                int id = Integer.parseInt(p[0].trim());
+                int wx1 = Integer.parseInt(p[1].trim());
+                int wy1 = Integer.parseInt(p[2].trim());
+                int wx2 = Integer.parseInt(p[3].trim());
+                int wy2 = Integer.parseInt(p[4].trim());
+                raw.add(new int[]{id, wx1, wy1, wx2, wy2});
+            }
+        } catch (IOException e) {
+            System.err.println("[GUI] Could not read zone file: " + e.getMessage());
+        }
+        if (raw.isEmpty()) {
+            z.add(new ZoneRect(1, 30, 30, 240, 160));
+            z.add(new ZoneRect(2, 290, 30, 230, 160));
+            z.add(new ZoneRect(3, 30, 210, 240, 160));
+            z.add(new ZoneRect(4, 290, 210, 230, 160));
+            z.add(new ZoneRect(5, 160, 390, 230, 130));
+            return z;
+        }
+        int maxWX = 1, maxWY = 1;
+        for (int[] r : raw) {
+            if (r[3] > maxWX) maxWX = r[3];
+            if (r[4] > maxWY) maxWY = r[4];
+        }
+        // map to a 500x500 canvas with 20px padding
+        int canvasW = 500, canvasH = 500, pad = 20;
+        for (int[] r : raw) {
+            int sx  = pad + r[1] * canvasW / maxWX;
+            int sy  = pad + r[2] * canvasH / maxWY;
+            int sx2 = pad + r[3] * canvasW / maxWX;
+            int sy2 = pad + r[4] * canvasH / maxWY;
+            z.add(new ZoneRect(r[0], sx, sy, sx2 - sx, sy2 - sy));
+        }
         return z;
     }
 
@@ -407,6 +451,24 @@ public int addEvent(String time, int zoneId, String eventType, String severity) 
             return c;
         }
     }
+    static class SeverityCellRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                                                       boolean isSelected, boolean hasFocus, int row, int col) {
+            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
+            if (value != null) {
+                switch (value.toString().toUpperCase()) {
+                    case "HIGH":     c.setForeground(new Color(200, 40, 40));  break;
+                    case "MODERATE": c.setForeground(new Color(200, 120, 20)); break;
+                    case "LOW":      c.setForeground(new Color(40, 160, 40));  break;
+                    default:         c.setForeground(Color.GRAY);              break;
+                }
+                setFont(getFont().deriveFont(Font.BOLD));
+            }
+            return c;
+        }
+    }
+
     //cell renderer for event state column
    static class EventStatusCellRenderer extends DefaultTableCellRenderer {
         @Override
