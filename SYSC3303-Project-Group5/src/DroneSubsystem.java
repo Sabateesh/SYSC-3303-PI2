@@ -1,7 +1,6 @@
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.net.*;
+import java.io.*;
+import java.util.*;
 
 public class DroneSubsystem implements Runnable {
 
@@ -13,87 +12,154 @@ public class DroneSubsystem implements Runnable {
     private final Queue<Event> fromFire;
     private volatile boolean running;
 
-    //completion lock for all drones back to base station
     private int activeDrones = 0;
     private final Object completionLock = new Object();
 
-    public DroneSubsystem(SchedulerServer scheduler, List<Zone> zones, FireIncidentSubsystemGUI gui) {
-        this.scheduler = scheduler;
-        this.gui = gui;
-        this.fromFire = new LinkedList<>();
-        this.drones = new ArrayList<>();
-        this.zones = zones;
-        this.running = true;
-        this.initializeDrones();
+    private DatagramSocket socket;
+    private InetAddress schedulerAddress;
+    private int schedulerPort;
+
+    public DroneSubsystem(String hostIP, int hostPort) throws Exception {
+
+        schedulerAddress = InetAddress.getByName(hostIP);
+        schedulerPort = hostPort;
+
+        socket = new DatagramSocket();
+
+        initializeDrones();
     }
 
-    public void initializeDrones() {
-        for(int i=0; i<NUM_DRONES; i++) {
-            String droneName = "Drone-"+i;
-            Drone drone = new Drone(this, zones, droneName, gui);
-            Thread droneThread =
-                    new Thread(drone, droneName);
-            drones.add(droneThread);
+    private void initializeDrones() {
+
+        for(int i = 0; i < NUM_DRONES; i++) {
+
+            String droneName = "Drone-" + i;
+
+            Drone drone = new Drone(this, droneName);
+
+            Thread droneThread = new Thread(drone);
+
+            droneThreads.add(droneThread);
+
             droneThread.start();
         }
     }
 
     public Event requestTask() throws InterruptedException {
-        synchronized (fromFire) {
-            while (fromFire.isEmpty()) {
-                fromFire.wait();
-            }
-            synchronized (completionLock) {
+
+        synchronized(taskQueue) {
+
+            while(taskQueue.isEmpty())
+                taskQueue.wait();
+
+            synchronized(completionLock) {
                 activeDrones++;
             }
-            return fromFire.poll();
+
+            return taskQueue.poll();
         }
     }
 
     public void reportDone(Event event) {
-        if (event == null) return;
-        gui.paintEvent(event);
-        scheduler.reportDone(event);
+
+        try {
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            ObjectOutputStream out = new ObjectOutputStream(bos);
+
+            out.writeObject(event);
+            out.flush();
+
+            byte[] data = bos.toByteArray();
+
+            DatagramPacket packet =
+                    new DatagramPacket(data, data.length,
+                            schedulerAddress, schedulerPort);
+
+            socket.send(packet);
+
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void reportToBase() {
-        synchronized (completionLock) {
+
+        synchronized(completionLock) {
+
             activeDrones--;
-            if(activeDrones == 0 && fromFire.isEmpty())
+
+            if(activeDrones == 0 && taskQueue.isEmpty())
                 completionLock.notifyAll();
         }
     }
 
-    public boolean isAllDronesDone() {
-        synchronized (completionLock) {
-            return activeDrones == 0 && fromFire.isEmpty();
-        }
-    }
-    public Object getCompletionLock() {
-        return completionLock;
-    }
-
     @Override
     public void run() {
-        System.out.println("[DroneSubsystem] Drone subsystem started");
 
-        while (running) {
+        System.out.println("[DroneSubsystem] Running");
+
+        byte[] buffer = new byte[4096];
+
+        while(running) {
+
             try {
-                Event task = scheduler.requestTask(); // blocks until work
-                synchronized (fromFire) {
-                    fromFire.offer(task);
-                    fromFire.notifyAll();
+
+                DatagramPacket packet =
+                        new DatagramPacket(buffer, buffer.length);
+
+                socket.receive(packet);
+
+                ByteArrayInputStream bis =
+                        new ByteArrayInputStream(packet.getData(), 0, packet.getLength());
+
+                ObjectInputStream in = new ObjectInputStream(bis);
+
+                Object obj = in.readObject();
+
+                if(obj instanceof Event) {
+
+                    Event event = (Event) obj;
+
+                    synchronized(taskQueue) {
+
+                        taskQueue.offer(event);
+                        taskQueue.notifyAll();
+                    }
                 }
-            } catch (InterruptedException e) {
-                System.out.println("[DroneSubsystem] Interrupted, shutting down");
-                running = false;
-                Thread.currentThread().interrupt();
+
+            } catch(Exception e) {
+                e.printStackTrace();
             }
         }
+    }
 
-        for (Thread drone : drones) {
-            drone.interrupt();
+    public void sendJoin() {
+
+        try {
+
+            String msg = "JOIN:DRONE_SUBSYSTEM";
+
+            byte[] data = msg.getBytes();
+
+            DatagramPacket packet =
+                    new DatagramPacket(data, data.length,
+                            schedulerAddress, schedulerPort);
+
+            socket.send(packet);
+
+        } catch(Exception e) {
+            e.printStackTrace();
         }
-        System.out.println("[DroneSubsystem] Drone subsystem ended");
+    }
+
+    public static void main(String[] args) throws Exception {
+
+        DroneSubsystem subsystem =
+                new DroneSubsystem("127.0.0.1", 5000);
+
+        subsystem.sendJoin();
+
+        new Thread(subsystem).start();
     }
 }
