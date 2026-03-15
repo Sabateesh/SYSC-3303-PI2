@@ -11,6 +11,7 @@ public class Drone implements Runnable {
     private final DroneStateMachine stateMachine;
     private final List<Zone> zones;
     private int currentZoneId = 0;
+    private int targetZoneId = 0;  // zone the drone is currently heading to (0 = none)
     private float waterRemaining;
     private float batteryRemaining;
 
@@ -63,6 +64,9 @@ public class Drone implements Runnable {
     public int getCurrentZoneId() {
         return currentZoneId;
     }
+    public int getTargetZoneId() {
+        return targetZoneId;
+    }
 
     public void setDroneFull() {
         waterRemaining = TANK_SIZE;
@@ -100,6 +104,8 @@ public class Drone implements Runnable {
                         break;
                     case DroneState.enRoute:
                         System.out.println("[" + droneName + "] Enroute to zone " + event.getZoneID());
+                        targetZoneId = event.getZoneID();
+                        gui.paintDrone(this);
 
                         try {
                             Zone newZone = Zone.getZoneFromId(zones, event.getZoneID());
@@ -111,6 +117,7 @@ public class Drone implements Runnable {
                         } catch (Zone.UnknownZoneException e) {
                             System.out.println("[" + droneName + "] Zone does not exist " + event.getZoneID());
                         }
+                        targetZoneId = 0;
                         stateMachine.handleEvent(DroneEvent.arrivedToFire);
                         break;
                     case DroneState.droppingAgent:
