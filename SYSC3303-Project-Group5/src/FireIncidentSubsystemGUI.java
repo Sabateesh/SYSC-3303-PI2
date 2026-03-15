@@ -180,10 +180,25 @@ public class FireIncidentSubsystemGUI extends JFrame {
 
         droneTableModel.setValueAt(dsg.getLabel(), r, 1);
         droneTableModel.setValueAt((int)(d.getWaterRemaining()*ReservoirRenderer.precision), r, 2);
-        droneTableModel.setValueAt(d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base", r, 3);
+
+        // Show routing context in the Zone column
+        String zoneDisplay;
+        switch (d.getDroneState()) {
+            case DroneState.enRoute:
+                zoneDisplay = "→ Zone " + d.getTargetZoneId();
+                break;
+            case DroneState.returnOrigin:
+            case DroneState.returnForRefill:
+                zoneDisplay = (d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base") + " → Base";
+                break;
+            default:
+                zoneDisplay = d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base";
+                break;
+        }
+        droneTableModel.setValueAt(zoneDisplay, r, 3);
         droneTableModel.setValueAt(d.batteryPercent(), r, 4);
 
-        droneMarkers.put(d.getDroneName(), new DroneMarker(d.getDroneName(), d.getCurrentZoneId(), dsg));
+        droneMarkers.put(d.getDroneName(), new DroneMarker(d.getDroneName(), d.getCurrentZoneId(), d.getTargetZoneId(), dsg));
     }
 
     public synchronized void paintDrone(Drone d) {
@@ -346,14 +361,16 @@ public class FireIncidentSubsystemGUI extends JFrame {
         return legend;
     }
 
-    //marker data for drowing a drone on the zone map
+    //marker data for drawing a drone on the zone map
     static class DroneMarker{
         final String name;
         final int zoneId;
+        final int targetZoneId;
         final DroneStateGui state;
-        DroneMarker(String name, int zoneId, DroneStateGui state){
+        DroneMarker(String name, int zoneId, int targetZoneId, DroneStateGui state){
             this.name=name;
             this.zoneId=zoneId;
+            this.targetZoneId=targetZoneId;
             this.state=state;
         }
     }
@@ -446,33 +463,72 @@ public class FireIncidentSubsystemGUI extends JFrame {
                     g2.drawString("✓ Extinguished", z.x + 6, z.y + 34);
                 }
             }
-            // draw drone markers
-            int droneOffset = 0;
+            // draw flight-path lines for en-route drones (drawn before markers so markers appear on top)
+            g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
+                    0, new float[]{8, 5}, 0));
+            for (DroneMarker dm : drones.values()) {
+                if (dm.state != DroneStateGui.InRoute || dm.targetZoneId <= 0) continue;
+                ZoneRect toZone = null;
+                for (ZoneRect z : zones) {
+                    if (z.id == dm.targetZoneId) { toZone = z; break; }
+                }
+                if (toZone == null) continue;
+                // from: current zone centre, or base (bottom-left corner) if zoneId == 0
+                int fromX, fromY;
+                if (dm.zoneId > 0) {
+                    ZoneRect fromZone = null;
+                    for (ZoneRect z : zones) { if (z.id == dm.zoneId) { fromZone = z; break; } }
+                    fromX = (fromZone != null) ? fromZone.centreX() : 20;
+                    fromY = (fromZone != null) ? fromZone.centreY() : getHeight() - 25;
+                } else {
+                    fromX = 20;
+                    fromY = getHeight() - 25;
+                }
+                g2.setColor(new Color(60, 130, 220, 180));
+                g2.drawLine(fromX, fromY, toZone.centreX(), toZone.centreY());
+                // small arrowhead at destination
+                double angle = Math.atan2(toZone.centreY() - fromY, toZone.centreX() - fromX);
+                int ax = toZone.centreX(), ay = toZone.centreY();
+                int[] arrowX = {ax, ax - (int)(12*Math.cos(angle-0.4)), ax - (int)(12*Math.cos(angle+0.4))};
+                int[] arrowY = {ay, ay - (int)(12*Math.sin(angle-0.4)), ay - (int)(12*Math.sin(angle+0.4))};
+                g2.setStroke(new BasicStroke(1f));
+                g2.fillPolygon(arrowX, arrowY, 3);
+            }
+
+            // draw drone markers — group by zone so same-zone drones stack neatly
+            Map<Integer, Integer> zoneSlot = new HashMap<>(); // zoneId -> next slot index
+            int baseSlot = 0;
+            g2.setStroke(new BasicStroke(1f));
             for (DroneMarker dm : drones.values()) {
                 ZoneRect target = null;
-                if (dm.zoneId > 0) {
+                int effectiveZone = (dm.state == DroneStateGui.InRoute) ? 0 : dm.zoneId; // en-route drones shown at base
+                if (effectiveZone > 0) {
                     for (ZoneRect z : zones) {
-                        if (z.id == dm.zoneId) { target = z; break; }
+                        if (z.id == effectiveZone) { target = z; break; }
                     }
                 }
                 int dx, dy;
                 if (target != null) {
-                    dx = target.centreX() + droneOffset * 25 - 10;
-                    dy = target.y + target.h - 28;
+                    int slot = zoneSlot.getOrDefault(effectiveZone, 0);
+                    zoneSlot.put(effectiveZone, slot + 1);
+                    dx = target.x + 4 + slot * 56;
+                    dy = target.y + target.h - 26;
                 } else {
-                    dx = 15 + droneOffset * 65;
-                    dy = getHeight() - 35;
+                    dx = 4 + baseSlot * 56;
+                    dy = getHeight() - 30;
+                    baseSlot++;
                 }
                 g2.setColor(dm.state.getColor());
-                g2.fillRoundRect(dx, dy, 50, 20, 8, 8);
+                g2.fillRoundRect(dx, dy, 52, 20, 8, 8);
                 g2.setColor(Color.BLACK);
-                g2.setStroke(new BasicStroke(1f));
-                g2.drawRoundRect(dx, dy, 50, 20, 8, 8);
+                g2.drawRoundRect(dx, dy, 52, 20, 8, 8);
                 g2.setFont(getFont().deriveFont(Font.BOLD, 10f));
                 g2.setColor(Color.WHITE);
                 String shortName = dm.name.replaceAll("[^0-9]", "");
-                g2.drawString("D(" + shortName + ")", dx + 5, dy + 14);
-                droneOffset++;
+                String label = dm.state == DroneStateGui.InRoute
+                        ? "D(" + shortName + ")→" + dm.targetZoneId
+                        : "D(" + shortName + ")";
+                g2.drawString(label, dx + 3, dy + 14);
             }
             g2.dispose();
         }

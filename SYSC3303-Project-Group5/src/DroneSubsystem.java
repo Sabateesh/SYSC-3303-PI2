@@ -7,7 +7,7 @@ public class DroneSubsystem implements Runnable {
 
     private final SchedulerServer scheduler;
     private final FireIncidentSubsystemGUI gui;
-    private final static int NUM_DRONES = 1;
+    public final static int NUM_DRONES = 3;
     private final List<Thread> drones;
     private final List<Zone> zones;
     private final Queue<Event> fromFire;
