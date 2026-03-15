@@ -23,7 +23,8 @@ public class Event implements Serializable {
         EXTINGUISHED,
         PENDING,
         DISPATCHED,
-        DROPPING
+        DROPPING,
+        PARTIAL_EXTINGUISHED
     }
     //event attrib
     private final String time;
@@ -73,6 +74,7 @@ public class Event implements Serializable {
         else
             waterLeft -= waterVolume;
     }
+    public void setWaterLeft(float waterLeft) { this.waterLeft = waterLeft; }
 
     //parse an eventtype from a string
     public static EventType parseEventType(String typeString){

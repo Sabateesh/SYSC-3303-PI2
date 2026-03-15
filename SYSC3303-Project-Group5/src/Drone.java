@@ -19,6 +19,7 @@ public class Drone implements Runnable {
     private float waterRemaining;
     private float batteryRemaining;
     private final String droneName;
+    private DroneState guiState = DroneState.idle;
 
     public Drone(DroneSubsystem droneSubsystem, String droneName, List<Zone> zones) {
         this.droneSubsystem = droneSubsystem;
@@ -30,10 +31,35 @@ public class Drone implements Runnable {
         this.event = null;
     }
 
+    // Constructor for GUI updates
+    public Drone(String droneName, List<Zone> zones, int currentZoneId, float waterRemaining, float batteryRemaining, int targetZoneId, long lastAnimDurationMs, long animStartTime) {
+        this.droneSubsystem = null;
+        this.droneName = droneName;
+        this.zones = zones;
+        this.stateMachine = new DroneStateMachine(droneName);
+        this.currentZoneId = currentZoneId;
+        this.waterRemaining = waterRemaining;
+        this.batteryRemaining = batteryRemaining;
+        this.targetZoneId = targetZoneId;
+        this.lastAnimDurationMs = lastAnimDurationMs;
+        this.animStartTime = animStartTime;
+        this.event = null;
+        if (targetZoneId > 0) {
+            this.guiState = DroneState.enRoute;
+        } else if (currentZoneId > 0) {
+            this.guiState = DroneState.droppingAgent;
+        } else {
+            this.guiState = DroneState.idle;
+        }
+    }
+
     public String getDroneName() {
         return droneName;
     }
     public DroneState getDroneState() {
+        if (droneSubsystem == null) {
+            return guiState;
+        }
         return stateMachine.getState();
     }
     public float getWaterRemaining() {
@@ -85,7 +111,7 @@ public class Drone implements Runnable {
 
     private void sendStatus() {
         try {
-            droneSubsystem.sendStatus(droneName, batteryRemaining, currentZoneId, waterRemaining);
+            droneSubsystem.sendStatus(droneName, batteryRemaining, currentZoneId, waterRemaining, targetZoneId, lastAnimDurationMs, animStartTime);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -150,7 +176,13 @@ public class Drone implements Runnable {
                             stateMachine.handleEvent(DroneEvent.jobFinished);
                         } else {
                             System.out.println("[" + droneName + "] Tank empty, need refill");
+                            event.deliverEvent(Event.State.PARTIAL_EXTINGUISHED);
                             stateMachine.handleEvent(DroneEvent.needRefill);
+                            try {
+                                droneSubsystem.reportPartialDone(event, droneName);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
                         }
                         sendStatus();
                         break;

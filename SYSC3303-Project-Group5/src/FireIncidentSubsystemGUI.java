@@ -37,6 +37,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
     private final List<Zone> zoneData;
     private volatile List<Drone> drones;
     private volatile List<Event> events;
+    private Scheduler scheduler;
 
     private final Map<Integer,FireStatus> zoneFireStatus;
     private final Map<Integer,String> zoneSeverity;
@@ -47,8 +48,8 @@ public class FireIncidentSubsystemGUI extends JFrame {
     private final JLabel activeFiresLabel;
     private final JLabel droneSummeryLabel;
     private final JLabel statusLabel;
-        
-    public FireIncidentSubsystemGUI(List<Zone> zoneData) {
+
+    public FireIncidentSubsystemGUI(List<Zone> zoneData, Scheduler scheduler) {
         super("PI2 - Firefighting Drone Swarm");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1000, 650);
@@ -63,12 +64,14 @@ public class FireIncidentSubsystemGUI extends JFrame {
 
         this.drones = new LinkedList<>();
         this.events = new LinkedList<>();
+        this.scheduler = scheduler;
+        scheduler.setGui(this);
 
         //init state maps
         zoneFireStatus = new HashMap<>();
         zoneSeverity = new HashMap<>();
         droneMarkers = new HashMap<>();
-        
+
 
         //zones panel
         this.zoneData = zoneData;
@@ -214,7 +217,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
                 if (z.id == d.getTargetZoneId()) { toPx = z.fireX(); toPy = z.fireY(); break; }
             }
         } else if (d.getDroneState() == DroneState.returnOrigin || d.getDroneState() == DroneState.returnForRefill) {
-            // from: current fire zone, to: the base station 
+            // from: current fire zone, to: the base station
             if (d.getCurrentZoneId() > 0) {
                 for (ZoneRect z : zones) {
                     if (z.id == d.getCurrentZoneId()) { fromPx = z.fireX(); fromPy = z.fireY(); break; }
@@ -284,8 +287,8 @@ public class FireIncidentSubsystemGUI extends JFrame {
                 zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
                 zoneSeverity.put(e.getZoneID(), e.getSeverity().toString());
                 break;
-            case Event.State.DISPATCHED:
-                eventTableModel.setValueAt(new EventProgressRenderer.ProgressData((int)(((e.getWaterRequired()-e.getWaterLeft())*100)/e.getWaterRequired()), "Dispatched"), r, 4);
+            case Event.State.PARTIAL_EXTINGUISHED:
+                eventTableModel.setValueAt(new EventProgressRenderer.ProgressData((int)(((e.getWaterRequired()-e.getWaterLeft())*100)/e.getWaterRequired()), "Partially Extinguished"), r, 4);
                 zoneFireStatus.put(e.getZoneID(), FireStatus.Active);
                 zoneSeverity.put(e.getZoneID(), e.getSeverity().toString());
                 break;
@@ -320,6 +323,51 @@ public class FireIncidentSubsystemGUI extends JFrame {
     public synchronized void addEvent(Event event) {
         if(!events.contains(event)) events.add(event);
         SwingUtilities.invokeLater(this::paintAllEvents);
+    }
+
+    public synchronized void updateEvent(Event event) {
+        // Find the event and update it
+        for (int i = 0; i < events.size(); i++) {
+            if (events.get(i).equals(event)) {
+                events.set(i, event);
+                break;
+            }
+        }
+        SwingUtilities.invokeLater(this::paintAllEvents);
+    }
+
+    public synchronized void updateDrone(String note) {
+        // note: droneId,battery,currentZoneId,water,targetZoneId,lastAnimDurationMs,animStartTime
+        String[] parts = note.split(",");
+        String droneId = parts[0];
+        float batteryRemaining = Float.parseFloat(parts[1]);
+        int currentZoneId = Integer.parseInt(parts[2]);
+        float waterRemaining = Float.parseFloat(parts[3]);
+        int targetZoneId = Integer.parseInt(parts[4]);
+        long lastAnimDurationMs = Long.parseLong(parts[5]);
+        long animStartTime = Long.parseLong(parts[6]);
+
+        // Find or create drone
+        Drone drone = null;
+        for (Drone d : drones) {
+            if (d.getDroneName().equals(droneId)) {
+                drone = d;
+                break;
+            }
+        }
+        if (drone == null) {
+            // Create a dummy drone for GUI
+            drone = new Drone(droneId, this.zoneData, currentZoneId, waterRemaining, batteryRemaining, targetZoneId, lastAnimDurationMs, animStartTime);
+            registerDrone(drone);
+        } else {
+            // Update drone fields
+            // But Drone may not have setters, so perhaps call paintDrone with updated
+            // Since Drone is complex, perhaps re-register or something.
+            // For simplicity, assume drones are updated via state, but since no state, perhaps remove and add.
+            drones.remove(drone);
+            drone = new Drone(droneId, this.zoneData, currentZoneId, waterRemaining, batteryRemaining, targetZoneId, lastAnimDurationMs, animStartTime);
+            registerDrone(drone);
+        }
     }
 
     //set bottom status bar
@@ -760,6 +808,9 @@ public class FireIncidentSubsystemGUI extends JFrame {
                     } else if (status.contains("pending")) {
                         setForeground(new Color(150, 150, 150));
                         setBackground(new Color(150, 150, 150, 50));
+                    } else if (status.contains("partially")) {
+                        setForeground(new Color(200, 150, 20));
+                        setBackground(new Color(200, 150, 20, 50));
                     } else {
                         setForeground(Color.BLACK);
                         setBackground(Color.WHITE);
@@ -791,3 +842,27 @@ public class FireIncidentSubsystemGUI extends JFrame {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
