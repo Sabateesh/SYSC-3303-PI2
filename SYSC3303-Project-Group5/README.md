@@ -1,4 +1,4 @@
-# SYSC3303A — Iteration 2, Group 5
+# SYSC3303A — Iteration 3, Group 5
 ## Included Files
 - `README.md` (contains info and instructions)
 - `Sample_event_file.csv` (contains sample events)
@@ -20,7 +20,7 @@
 - `src/FireIncidentSubsystemJUnitTest.java` (test class for fire incident subsystem)
 - `src/Message.java`
 - `src/Scheduler.java` (scheduler for the tasks)
-- `src/Scheduler.java`
+- `src/UdpCommunicationTest.java` (tests for UDP communication)
 - `src/Zone.java` (zone class to keep track of individual zones)
 
 ## Detailed Instructions
