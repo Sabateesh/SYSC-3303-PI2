@@ -93,8 +93,4 @@ public class Event implements Serializable {
     public String toString(){
         return String.format("Event[Time=%s, Zone=%d, Type=%s, Severity=%s (%dL)]", time, zoneID, eventType, severity, severity.getWaterRequired());
     }
-
-
-
-
 }
