@@ -20,7 +20,7 @@
 - `src/FireIncidentSubsystemJUnitTest.java` (test class for fire incident subsystem)
 - `src/Message.java`
 - `src/Scheduler.java` (scheduler for the tasks)
-- `src/SchedulerServer.java`
+- `src/Scheduler.java`
 - `src/Zone.java` (zone class to keep track of individual zones)
 
 ## Detailed Instructions

@@ -1,0 +1,30 @@
+Iteration 3 – Multiple Drones & Distributed Execution
+For this iteration, you are to use what you have learned from Assignments 2 and 3 and split your system up into three (or more) separate programs that can run on three separate computers and communicate with each other using UDP. Your task in Assignment 3 was to implement a simple version of a remote procedure call, so you are encouraged to recycle that code here. The Scheduler will now be used to coordinate the movement of drone such that each drone services roughly the same number of zones as all of the others and so that the waiting time for fires to be extinguished in a zone is minimized. Hint: if zone 1 needs to be serviced by a drone and there is a drone on the way to service zone 2 which has the same severity and  that drone must pass through zone 1, then zone 1 must be serviced instead. The state machines for each drone should execute independently of each other, but they will all have to share their location with the scheduler. The scheduler will choose which drone will be used to service a given request.
+
+Iteration #3 Summary:
+• Increase complexity: run separate programs on potentially separate machines.
+• The Scheduler coordinates multiple drones, ensuring balanced workloads.
+• Each drone operates independently but reports status to the Scheduler.
+• Update the GUI to keep track of which drone is sent to which fire zone and the severity of each zone.
+
+Previous questions on Iteration #3:
+Below are some of the questions students asked in Winter 2025 regarding iteration 3:
+• Does a drone need to be in the centre of a zone to put out the fire, or simply needs to be in the zone (at any point)?
+- Yes, once the drone reaches the centre of the zone, they will be assumed to have reached that zone and ready to release the water/foam.
+• Are we required to consider drone collisions when using multiple drones?
+- It is not required. However, depending on how you are keeping track of your drones' location, you can include that in your code.
+• Are we required to modify the Drone Subsystem, Scheduler, and Fire Incident Subsystem so that they can no longer directly call each other's methods and instead must communicate exclusively via UDP?
+- All communications between all three subsystems must be done using UDP.
+• Do we need to demonstrate that these programs actually run on different machines, or is it sufficient to show that they communicate over a network protocol (UDP) while running on the same machine?
+- You don't need to run it on three different computers, however, you must have three different process, one process (main method) for each subsystem.
+• For the unit tests, should we include testing of the UDP sending and receiving packets? If so, should we set up separate sockets within the tests to verify the packet contents?
+- For UDP communications, you need to test mainly the contents of packets sent and received. You should have methods for creating these packets. Therefore, you can test the methods directly. In the case you don't have a specific method for creating the packets and you included it in the UDP communication method, you need to create a separate socket in within the test.
+• Iterations 3 and 4 list "Any unchanged diagrams from the previous iterations UML class diagram" as a required work product. Does this mean that we do not need to provide newly updated UML Class/State/Sequence diagrams? Should only the UML class diagram be updated?
+- No new UML diagrams are needed for iteration 3 or 4. If you did any changes in the structure of your project/code, then you can update the diagrams and submit them with the solution.
+
+Work Products for Iteration #3:
+• “README.txt” file explaining the names of your files, set up instructions, etc.
+• Breakdown of responsibilities of each team member for this and previous iterations
+• Any unchanged diagrams from the previous iterations UML class diagram
+• Detailed set up and test instructions, including test files used
+• Code (.java files, all required IntelliJ files, etc.)

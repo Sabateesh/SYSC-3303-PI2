@@ -1,31 +1,23 @@
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.io.*;
+import java.net.*;
+import java.util.*;
 
 public class FireIncidentSubsystem implements Runnable {
-    private final Scheduler scheduler;
-    private final FireIncidentSubsystemGUI gui;
+    private DatagramSocket socket;
     private final List<Event> events;
     private final String eventpath;
     private final String threadName;
 
-    //constr for fireincidentsubsystem
-    public FireIncidentSubsystem(String eventpath, Scheduler scheduler) {
-        this.eventpath = eventpath;
-        this.scheduler = scheduler;
-        this.gui = null;
-        this.threadName = "FireIncidentSubsystem";
-        this.events = new ArrayList<>();
-    }
+    private static final int SCHEDULER_PORT = 5000;
+    private static final int FIRE_PORT = 5001;
+    private static final String HOST = "localhost";
 
-    public FireIncidentSubsystem(String eventpath, Scheduler scheduler, FireIncidentSubsystemGUI gui) {
+    //constr for fireincidentsubsystem
+    public FireIncidentSubsystem(String eventpath) throws Exception {
         this.eventpath = eventpath;
-        this.scheduler = scheduler;
-        this.gui = gui;
         this.threadName = "FireIncidentSubsystem";
         this.events = new ArrayList<>();
+        // socket created in run()
     }
 
     //load events
@@ -59,7 +51,7 @@ public class FireIncidentSubsystem implements Runnable {
         try {
             String[] parts = line.trim().split("[,\\s]+");
             if (parts.length < 4) {
-                System.err.println("[" + threadName + "] invlid event line format: " + line);
+                System.err.println("[" + threadName + "] invalid event line format: " + line);
                 return;
             }
             String time = parts[0].trim();
@@ -72,12 +64,32 @@ public class FireIncidentSubsystem implements Runnable {
             System.err.println("[" + threadName + "] error parsing event line '" + line + "': " + e.getMessage());
         }
     }
+
+    private void sendMessage(Message msg) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream out = new ObjectOutputStream(bos);
+        out.writeObject(msg);
+        out.flush();
+        byte[] data = bos.toByteArray();
+        DatagramPacket packet = new DatagramPacket(data, data.length, InetAddress.getByName(HOST), SCHEDULER_PORT);
+        socket.send(packet);
+    }
+
+    private Message receiveMessage() throws Exception {
+        byte[] buffer = new byte[4096];
+        DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+        socket.receive(packet);
+        ByteArrayInputStream bis = new ByteArrayInputStream(packet.getData(), 0, packet.getLength());
+        ObjectInputStream in = new ObjectInputStream(bis);
+        return (Message) in.readObject();
+    }
+
     public List<Event> getEvents() {
         return events;
     }
 
     //parse timestamp string "HH:mm:ss"
-    private long parseTimeToMillis(String time){
+    public long parseTimeToMillis(String time){
         try{
             String[] parts = time.split("[:.]");
             int hours = Integer.parseInt(parts[0]);
@@ -96,12 +108,15 @@ public class FireIncidentSubsystem implements Runnable {
 
     @Override
     public void run() {
-        //load events
-        if (events.isEmpty()) {
-            loadEvents();
+        try {
+            socket = new DatagramSocket(FIRE_PORT);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
         }
+        loadEvents();
         if (events.isEmpty()) {
-            System.out.println("[FireIncidentSubsystem] No events to send.");
+            System.out.println("[" + threadName + "] No events to send.");
             return;
         }
         //send events spaced out by timestamps
@@ -121,7 +136,7 @@ public class FireIncidentSubsystem implements Runnable {
             if(delay > 0){
                 try{
                     System.out.println("[" + threadName + "] waiting " + delay + "s until next event...");
-                    Thread.sleep(delay*SchedulerServer.simulationSpeed);
+                    Thread.sleep(delay* Scheduler.simulationSpeed);
                 } catch ( InterruptedException e){
                     System.out.println("[" + threadName + "] interrupted while waiting");
                     Thread.currentThread().interrupt();
@@ -129,16 +144,31 @@ public class FireIncidentSubsystem implements Runnable {
                 }
             }
             event.deliverEvent(Event.State.PENDING);
-            if(gui!=null) gui.paintEvent(event);
-
             System.out.println("[" + threadName + "] Sending event: " + event);
-            scheduler.sendEvent(event);
+            try {
+                sendMessage(new Message(Message.Type.EVENT, event, ""));
+                Message ack = receiveMessage();
+                System.out.println("[FireIncidentSubsystem] ACK received: " + ack);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             previousTimeMills = currentTimeMills;
         }
         //receive ALL confirmations
         for (int i = 0; i < events.size(); i++) {
-            String confirmation = scheduler.getConfirmation();
-            System.out.println("[FireIncidentSubsystem] Confirmation received: " + confirmation);
+            try {
+                Message confirmation = receiveMessage();
+                System.out.println("[FireIncidentSubsystem] Confirmation received: " + confirmation);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
+        socket.close();
+    }
+
+    public static void main(String[] args) throws Exception {
+        String eventPath = "SYSC3303-Project-Group5/Sample_event_file.csv";
+        FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath);
+        new Thread(fire).start();
     }
 }
