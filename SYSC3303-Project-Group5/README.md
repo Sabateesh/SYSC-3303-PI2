@@ -30,12 +30,13 @@
 
 ## Detailed Instructions
 1. Open the project in IntelliJ Idea
-2. Open the `Main.java` file.
-3. Click the run button at the top
+2. Run Main.java
+3. Run Drone.java
+4. Run FireIncidentSubsystem.java
 4. The program and GUI should start
 
 ## Responsibilities
-- Scheduling Logic/Work on GUI (Faraaz, 101298165)
-- Main GUI Development/Tests fpr DroneStateMachine (Sabateesh, 101259947)
-- Making Diagrams/State Machine Planning (Sabateesh, 101259947)
-- Drone State Transitions/GUI interaction setup (Aymen, 101326354, Ibrahim, 101235067)
+- UDP communication between scheduler and subsystems, UDP message test class, updates to GUI based on scheduler datagrams (Faraaz, 101298165)
+- UML sequence and class diagrams, GUI updates to information based on fire info, display drone path (Sabateesh, 101259947)
+- Update drone subsystem UDP communications, packet handling and registration with scheduler (Aymen, 101326354)
+- GUI visual changes and reorganization, updated GUI to show drone position, animations for visual feedback (Ibrahim, 101235067)
