@@ -1,4 +1,5 @@
 import java.io.Serializable;
+import java.util.Objects;
 
 public class Event implements Serializable {
     public enum EventType {
@@ -90,6 +91,17 @@ public class Event implements Serializable {
         } catch (IllegalArgumentException e){
             throw new IllegalArgumentException("invalid severity level" + servertiyString);
         }
+    }
+    @Override
+    public boolean equals(Object o){
+        if(this==o) return true;
+        if (o==null|| getClass()!= o.getClass()) return false;
+        Event event =(Event) o;
+        return zoneID == event.zoneID && Objects.equals(time,event.time);
+    }
+    @Override
+    public int hashCode(){
+        return Objects.hash(time, zoneID);
     }
     @Override
     public String toString(){

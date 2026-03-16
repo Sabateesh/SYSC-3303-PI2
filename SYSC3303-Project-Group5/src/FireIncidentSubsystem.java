@@ -148,6 +148,11 @@ public class FireIncidentSubsystem implements Runnable {
             try {
                 sendMessage(new Message(Message.Type.EVENT, event, ""));
                 Message ack = receiveMessage();
+                while (ack.getType() == Message.Type.ACK
+                        && (ack.getNote().startsWith("Done") || ack.getNote().startsWith("Partial"))) {
+                    System.out.println("[FireIncidentSubsystem] Completion received early: " + ack);
+                    ack = receiveMessage();
+                }
                 System.out.println("[FireIncidentSubsystem] ACK received: " + ack);
             } catch (Exception e) {
                 e.printStackTrace();

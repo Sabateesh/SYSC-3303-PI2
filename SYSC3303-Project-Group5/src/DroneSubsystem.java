@@ -73,8 +73,8 @@ public class DroneSubsystem implements Runnable {
         sendMessage(new Message(Message.Type.PARTIAL_DONE, event, droneId));
     }
 
-    public void sendStatus(String droneId, float battery, int zoneId, float water, int targetZoneId, long lastAnimDurationMs, long animStartTime) throws Exception {
-        String note = droneId + "," + battery + "," + zoneId + "," + water + "," + targetZoneId + "," + lastAnimDurationMs + "," + animStartTime;
+    public void sendStatus(String droneId, float battery, int zoneId, float water, int targetZoneId, long lastAnimDurationMs, long animStartTime, String state) throws Exception {
+        String note = droneId + "," + battery + "," + zoneId + "," + water + "," + targetZoneId + "," + lastAnimDurationMs + "," + animStartTime + "," + state;
         sendMessage(new Message(Message.Type.DRONE_STATUS, null, note));
     }
 

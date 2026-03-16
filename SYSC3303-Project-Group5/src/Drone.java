@@ -32,7 +32,7 @@ public class Drone implements Runnable {
     }
 
     // Constructor for GUI updates
-    public Drone(String droneName, List<Zone> zones, int currentZoneId, float waterRemaining, float batteryRemaining, int targetZoneId, long lastAnimDurationMs, long animStartTime) {
+    public Drone(String droneName, List<Zone> zones, int currentZoneId, float waterRemaining, float batteryRemaining, int targetZoneId, long lastAnimDurationMs, long animStartTime, String state) {
         this.droneSubsystem = null;
         this.droneName = droneName;
         this.zones = zones;
@@ -44,13 +44,11 @@ public class Drone implements Runnable {
         this.lastAnimDurationMs = lastAnimDurationMs;
         this.animStartTime = animStartTime;
         this.event = null;
-        if (targetZoneId > 0) {
-            this.guiState = DroneState.enRoute;
-        } else if (currentZoneId > 0) {
-            this.guiState = DroneState.droppingAgent;
-        } else {
-            this.guiState = DroneState.idle;
-        }
+       try {
+           this.guiState = DroneState.valueOf(state);
+       } catch (IllegalArgumentException e) {
+           this.guiState=DroneState.idle;
+       }
     }
 
     public String getDroneName() {
@@ -111,7 +109,7 @@ public class Drone implements Runnable {
 
     private void sendStatus() {
         try {
-            droneSubsystem.sendStatus(droneName, batteryRemaining, currentZoneId, waterRemaining, targetZoneId, lastAnimDurationMs, animStartTime);
+            droneSubsystem.sendStatus(droneName, batteryRemaining, currentZoneId, waterRemaining, targetZoneId, lastAnimDurationMs, animStartTime, stateMachine.getState().name());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -166,12 +164,12 @@ public class Drone implements Runnable {
                         event.useWater(emptyAmount);
                         if(event.getWaterLeft() <= 0) {
                             System.out.println("[" + droneName + "] Fire extinguished");
+                            event.deliverEvent(Event.State.EXTINGUISHED);
                             try {
                                 droneSubsystem.reportDone(event, droneName);
                             } catch (Exception e) {
                                 e.printStackTrace();
                             }
-                            event.deliverEvent(Event.State.EXTINGUISHED);
                             event = null;
                             stateMachine.handleEvent(DroneEvent.jobFinished);
                         } else {

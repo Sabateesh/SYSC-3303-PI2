@@ -50,7 +50,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
     private final JLabel statusLabel;
 
     public FireIncidentSubsystemGUI(List<Zone> zoneData, Scheduler scheduler) {
-        super("PI2 - Firefighting Drone Swarm");
+        super("PI3 - Firefighting Drone Swarm");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1000, 650);
         setLocationRelativeTo(null);
@@ -346,6 +346,8 @@ public class FireIncidentSubsystemGUI extends JFrame {
         int targetZoneId = Integer.parseInt(parts[4]);
         long lastAnimDurationMs = Long.parseLong(parts[5]);
         long animStartTime = Long.parseLong(parts[6]);
+        String stateStr = parts.length > 7 ? parts[7] : "idle";
+
 
         // Find or create drone
         Drone drone = null;
@@ -357,7 +359,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         }
         if (drone == null) {
             // Create a dummy drone for GUI
-            drone = new Drone(droneId, this.zoneData, currentZoneId, waterRemaining, batteryRemaining, targetZoneId, lastAnimDurationMs, animStartTime);
+            drone = new Drone(droneId, this.zoneData, currentZoneId, waterRemaining, batteryRemaining, targetZoneId, lastAnimDurationMs, animStartTime, stateStr);
             registerDrone(drone);
         } else {
             // Update drone fields
@@ -365,7 +367,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
             // Since Drone is complex, perhaps re-register or something.
             // For simplicity, assume drones are updated via state, but since no state, perhaps remove and add.
             drones.remove(drone);
-            drone = new Drone(droneId, this.zoneData, currentZoneId, waterRemaining, batteryRemaining, targetZoneId, lastAnimDurationMs, animStartTime);
+            drone = new Drone(droneId, this.zoneData, currentZoneId, waterRemaining, batteryRemaining, targetZoneId, lastAnimDurationMs, animStartTime, stateStr);
             registerDrone(drone);
         }
     }

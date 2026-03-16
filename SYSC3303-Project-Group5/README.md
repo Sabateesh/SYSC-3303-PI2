@@ -7,8 +7,13 @@
 - `P2SequenceDiagram_Deploy.png` (Deploying sequence diagram)
 - `P2SequenceDiagram_Initialization.png` (Initialization sequence diagram)
 - `P2SequenceDiagram_Refill.png` (Refill sequence diagram)
-- `P2StateMachine_Drone.png` (Drone state machine)
-- `P2StateMachine_Drone.png` (Scheduler state machine)
+- `P3StateMachine_Drone.png` (Drone state machine)
+- `P3StateMachine_Drone.png` (Scheduler state machine)
+- `PI3ClassDiagram.png` (UML class diagram )
+- `PI3SequenceDiagram_Deploy.png` (Deploy drone sequence diagram)
+- `PI3SequenceDiagram_Initalization.png` (Initialization sequence diagram)
+- `PI3SequenceDiagram_Refill.png` (Refill sequence diagram)
+
 - `src/Main.java` (main program)
 - `src/Drone.java` (represents a single drone which is assigned an event)
 - `src/DroneSubsystem.java` (the drone subsystem with multiple drones and which assigned tasks to drones)
@@ -32,5 +37,5 @@
 ## Responsibilities
 - Scheduling Logic/Work on GUI (Faraaz, 101298165)
 - Main GUI Development/Tests fpr DroneStateMachine (Sabateesh, 101259947)
-- Making Diagrams/State Machine Planning (Ibrahim, 101235067)
-- Drone State Transitions/GUI interaction setup (Aymen, 101326354)
+- Making Diagrams/State Machine Planning (Sabateesh, 101259947)
+- Drone State Transitions/GUI interaction setup (Aymen, 101326354, Ibrahim, 101235067)
