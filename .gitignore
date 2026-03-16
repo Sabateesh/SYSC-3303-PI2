@@ -30,3 +30,6 @@ out/
 lib/
 .ai/
 *.class
+.idea/copilot.data.migration.ask2agent.xml
+.idea/copilotDiffState.xml
+AGENTS.md

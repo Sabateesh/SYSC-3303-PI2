@@ -2,9 +2,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import java.net.*;
 import java.io.*;
-import java.util.List;
 
-public class UdpCommunicationTest {
+public class UdpCommunicationJUnitTest {
 
     @Test
     void testUdpMessageSendReceive() throws Exception {

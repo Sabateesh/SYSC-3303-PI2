@@ -115,6 +115,11 @@ public class FireIncidentSubsystem implements Runnable {
             return;
         }
         loadEvents();
+        try {
+            sendMessage(new Message(Message.Type.START, null, ""));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         if (events.isEmpty()) {
             System.out.println("[" + threadName + "] No events to send.");
             return;
@@ -158,6 +163,11 @@ public class FireIncidentSubsystem implements Runnable {
                 e.printStackTrace();
             }
             previousTimeMills = currentTimeMills;
+        }
+        try {
+            sendMessage(new Message(Message.Type.END_SIMULATION, null, ""));
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         //receive ALL confirmations
         for (int i = 0; i < events.size(); i++) {

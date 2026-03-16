@@ -5,7 +5,7 @@ This is a multi-threaded Java simulation of a drone-based fire response system. 
 - **FireIncidentSubsystem**: Loads fire events from CSV, sends them to scheduler with timed delays
 - **Scheduler**: Manages event queues and confirmations using synchronized LinkedList queues
 - **DroneSubsystem**: Coordinates 3 drones, each running in its own thread
-- **FireIncidentSubsystemGUI**: Swing-based GUI for visualization
+- **SchedulerGUI**: Swing-based GUI for visualization
 - **Drone**: Individual drone logic with state machine, water/battery management
 
 Communication uses shared `Queue<Event>` and `Queue<String>` between subsystems. All components run as separate threads started from `Main.java`.

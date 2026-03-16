@@ -10,7 +10,9 @@ public class Message implements Serializable {
         PARTIAL_DONE,   // Drone -> Scheduler (partially finished event)
         ACK,            // Scheduler -> Fire (confirmation)
         NO_TASK,        // Scheduler -> Drone (nothing available)
-        DRONE_STATUS    // Drone -> Scheduler (status update)
+        DRONE_STATUS,   // Drone -> Scheduler (status update)
+        START,          // Fire -> Scheduler (simulation start)
+        END_SIMULATION  // Fire -> Scheduler (simulation end)
     }
     private final Type type;
     private final Event event;

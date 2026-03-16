@@ -8,7 +8,7 @@ public class Scheduler implements Runnable {
 
     private final List<Event> events = new LinkedList<>();
     private final Map<String, DroneStatus> droneStatuses = new HashMap<>();
-    private FireIncidentSubsystemGUI gui;
+    private SchedulerGUI gui;
     private int nextDroneIndex = 0;
     private final Queue<String> requestingDrones = new LinkedList<>();
     private final Map<String, Integer> tasksAssigned = new HashMap<>();
@@ -16,6 +16,9 @@ public class Scheduler implements Runnable {
     private static final int FIRE_PORT = 5001;
     private static final int DRONE_PORT = 5002;
     private static final String HOST = "localhost";
+
+    private boolean simulationStarted = false;
+    private boolean endReceived = false;
 
     public Scheduler() throws Exception {
         socket = new DatagramSocket(SCHEDULER_PORT);
@@ -56,7 +59,7 @@ public class Scheduler implements Runnable {
         System.out.println("[Scheduler] Scheduler stopped");
     }
 
-    public void setGui(FireIncidentSubsystemGUI gui) {
+    public void setGui(SchedulerGUI gui) {
         this.gui = gui;
     }
 
@@ -85,17 +88,34 @@ public class Scheduler implements Runnable {
                 assignTasks();
                 break;
             case DRONE_STATUS:
-                // note: "droneId,battery,zoneId,water,targetZoneId,lastAnim,animStart"
+                // note: "droneId,battery,zoneId,water,targetZoneId,lastAnim,animStart,state"
                 String[] parts = msg.getNote().split(",");
                 String id = parts[0];
                 float battery = Float.parseFloat(parts[1]);
                 int zone = Integer.parseInt(parts[2]);
                 float water = Float.parseFloat(parts[3]);
-                droneStatuses.put(id, new DroneStatus(battery, zone, water));
-                if (gui != null) gui.updateDrone(msg.getNote());
+                int target = Integer.parseInt(parts[4]);
+                long lastAnim = Long.parseLong(parts[5]);
+                long animStart = Long.parseLong(parts[6]);
+                String state = parts[7];
+                DroneStatus ds = new DroneStatus(id, battery, zone, water, target, lastAnim, animStart, state);
+                droneStatuses.put(id, ds);
+                if (gui != null) gui.updateDrone(ds);
+                break;
+            case START:
+                simulationStarted = true;
+                if (gui != null) gui.setStatus(true);
+                System.out.println("STARTED !!!!!");
+                break;
+            case END_SIMULATION:
+                endReceived = true;
                 break;
             default:
                 System.out.println("[Scheduler] Unknown message type: " + msg.getType());
+        }
+        if (simulationStarted && events.isEmpty() && allDronesAtBase() && endReceived) {
+            if (gui != null) gui.setStatus(false);
+            System.out.println("STOPPED !!!!!");
         }
     }
 
@@ -143,12 +163,23 @@ public class Scheduler implements Runnable {
         return best;
     }
 
+    private boolean allDronesAtBase() {
+        for (DroneStatus ds : droneStatuses.values()) {
+            if (ds.zoneId != 0) return false;
+        }
+        return true;
+    }
 
-    private static class DroneStatus {
+    public static class DroneStatus {
+        String id;
         float battery;
         int zoneId;
         float water;
-        DroneStatus(float b, int z, float w) { battery = b; zoneId = z; water = w; }
+        int targetZoneId;
+        long lastAnimDurationMs;
+        long animStartTime;
+        String state;
+        DroneStatus(String i, float b, int z, float w, int t, long la, long as, String s) { id = i; battery = b; zoneId = z; water = w; targetZoneId = t; lastAnimDurationMs = la; animStartTime = as; state = s; }
     }
 
     public static void main(String[] args) throws Exception {

@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.List;
 
 //GUI Scaffold
-public class FireIncidentSubsystemGUI extends JFrame {
+public class SchedulerGUI extends JFrame {
      //drone states
     public enum DroneStateGui {
         IDLE("Idle", new Color(100,180,100)),
@@ -49,7 +49,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
     private final JLabel droneSummeryLabel;
     private final JLabel statusLabel;
 
-    public FireIncidentSubsystemGUI(List<Zone> zoneData, Scheduler scheduler) {
+    public SchedulerGUI(List<Zone> zoneData, Scheduler scheduler) {
         super("PI3 - Firefighting Drone Swarm");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1000, 650);
@@ -152,7 +152,7 @@ public class FireIncidentSubsystemGUI extends JFrame {
         add(summerybar,BorderLayout.NORTH);
 
         //bottom status bar
-        statusLabel= new JLabel("Status: Waiting for sim to start...");
+        statusLabel= new JLabel("Status: Waiting for sim to start... (Make sure to start 'FireIncidentSubsystem')");
         statusLabel.setBorder(BorderFactory.createEmptyBorder(4,8,4,8));
         statusLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN,12));
         add(statusLabel,BorderLayout.SOUTH);
@@ -336,17 +336,16 @@ public class FireIncidentSubsystemGUI extends JFrame {
         SwingUtilities.invokeLater(this::paintAllEvents);
     }
 
-    public synchronized void updateDrone(String note) {
+    public synchronized void updateDrone(Scheduler.DroneStatus ds) {
         // note: droneId,battery,currentZoneId,water,targetZoneId,lastAnimDurationMs,animStartTime
-        String[] parts = note.split(",");
-        String droneId = parts[0];
-        float batteryRemaining = Float.parseFloat(parts[1]);
-        int currentZoneId = Integer.parseInt(parts[2]);
-        float waterRemaining = Float.parseFloat(parts[3]);
-        int targetZoneId = Integer.parseInt(parts[4]);
-        long lastAnimDurationMs = Long.parseLong(parts[5]);
-        long animStartTime = Long.parseLong(parts[6]);
-        String stateStr = parts.length > 7 ? parts[7] : "idle";
+        String droneId = ds.id;
+        float batteryRemaining = ds.battery;
+        int currentZoneId = ds.zoneId;
+        float waterRemaining = ds.water;
+        int targetZoneId = ds.targetZoneId;
+        long lastAnimDurationMs = ds.lastAnimDurationMs;
+        long animStartTime = ds.animStartTime;
+        String stateStr = ds.state;
 
 
         // Find or create drone

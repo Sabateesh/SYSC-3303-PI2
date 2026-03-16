@@ -1,7 +1,7 @@
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.*;
-class DroneStateMachineTest{
+class DroneStateMachineJUnitTest {
     private DroneStateMachine fsm;
     @BeforeEach
     void setUp() {
