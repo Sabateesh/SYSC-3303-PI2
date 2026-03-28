@@ -19,6 +19,12 @@ public class Event implements Serializable {
             return waterRequired;
         }
     }
+    public enum FaultType {
+        NONE,
+        DRONE_STUCK,
+        ARRIVAL_SENSOR_FAILED,
+        NOZZLE_STUCK_OPEN
+    }
     public enum State {
         INACTIVE,
         EXTINGUISHED,
@@ -32,16 +38,22 @@ public class Event implements Serializable {
     private final int zoneID;
     private final EventType eventType;
     private final Severity severity;
+    private final FaultType faultType;
 
     private State curState;
     private float waterLeft; //amount of water left to put out the fire
 
     //event constr
     public Event(String time, int zoneID, EventType eventType, Severity severity){
+        this(time, zoneID, eventType, severity, FaultType.NONE);
+    }
+
+    public Event(String time, int zoneID, EventType eventType, Severity severity, FaultType faultType){
         this.time = time;
         this.zoneID = zoneID;
         this.eventType = eventType;
         this.severity = severity;
+        this.faultType = faultType == null ? FaultType.NONE : faultType;
         this.waterLeft = getWaterRequired();
         this.curState = State.INACTIVE;
     }
@@ -59,6 +71,7 @@ public class Event implements Serializable {
     public Severity getSeverity(){
         return severity;
     }
+    public FaultType getFaultType() { return faultType; }
     public int getWaterRequired(){
         return severity.getWaterRequired();
     }
@@ -92,6 +105,20 @@ public class Event implements Serializable {
             throw new IllegalArgumentException("invalid severity level" + servertiyString);
         }
     }
+    public static FaultType parseFaultType(String faultString) {
+        if (faultString == null || faultString.trim().isEmpty()) {
+            return FaultType.NONE;
+        }
+        String normalized = faultString.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+        if (normalized.equals("NONE") || normalized.equals("NO_FAULT")) {
+            return FaultType.NONE;
+        }
+        try {
+            return FaultType.valueOf(normalized);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("invalid fault type " + faultString);
+        }
+    }
     @Override
     public boolean equals(Object o){
         if(this==o) return true;
@@ -105,6 +132,7 @@ public class Event implements Serializable {
     }
     @Override
     public String toString(){
-        return String.format("Event[Time=%s, Zone=%d, Type=%s, Severity=%s (%dL)]", time, zoneID, eventType, severity, severity.getWaterRequired());
+        return String.format("Event[Time=%s, Zone=%d, Type=%s, Severity=%s (%dL), Fault=%s]",
+                time, zoneID, eventType, severity, severity.getWaterRequired(), faultType);
     }
 }

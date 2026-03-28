@@ -15,7 +15,11 @@ public class SchedulerGUI extends JFrame {
         InRoute("In Route", new Color(60,130,220)),
         DroppingAgent("Dropping Agent", new Color(220,140,40)),
         Returning("Returning", new Color(160,100,200)),
-        Refilling("Refilling", new Color(80,180,180));
+        Refilling("Refilling", new Color(80,180,180)),
+        CommFailure("Comm Failure", new Color(190, 40, 40)),
+        DroneStuckFault("Drone Stuck", new Color(168, 49, 49)),
+        ArrivalSensorFault("Arrival Sensor Fault", new Color(196, 78, 0)),
+        NozzleStuckFault("Nozzle Stuck", new Color(145, 34, 164));
         private final String label;
         private final Color color;
         DroneStateGui(String lable, Color color){
@@ -175,6 +179,18 @@ public class SchedulerGUI extends JFrame {
                 break;
             case DroneState.returnOrigin:
                 dsg = DroneStateGui.Returning;
+                break;
+            case DroneState.commFailure:
+                dsg = DroneStateGui.CommFailure;
+                break;
+            case DroneState.droneStuckFault:
+                dsg = DroneStateGui.DroneStuckFault;
+                break;
+            case DroneState.arrivalSensorFault:
+                dsg = DroneStateGui.ArrivalSensorFault;
+                break;
+            case DroneState.nozzleStuckFault:
+                dsg = DroneStateGui.NozzleStuckFault;
                 break;
             default:
                 dsg = DroneStateGui.IDLE;

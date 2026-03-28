@@ -6,6 +6,8 @@ public class Drone implements Runnable {
     public static final float BATTERY_SIZE = 50; //battery size in minutes
     public static final float DRONE_SPEED = 2*60; //drone speed in units per minute
     public static final float REFILL_RATE = 5; //liters refilled per second at base
+    private static final float ARRIVAL_TIMEOUT_FACTOR = 1.15f;
+    private static final long ARRIVAL_TIMEOUT_BUFFER_MS = 500;
 
     private final DroneSubsystem droneSubsystem;
     private Event event;
@@ -20,6 +22,8 @@ public class Drone implements Runnable {
     private float batteryRemaining;
     private final String droneName;
     private DroneState guiState = DroneState.idle;
+    private boolean hardFaultActive = false;
+    private String hardFaultState = "idle";
 
     public Drone(DroneSubsystem droneSubsystem, String droneName, List<Zone> zones) {
         this.droneSubsystem = droneSubsystem;
@@ -109,10 +113,55 @@ public class Drone implements Runnable {
 
     private void sendStatus() {
         try {
-            droneSubsystem.sendStatus(droneName, batteryRemaining, currentZoneId, waterRemaining, targetZoneId, lastAnimDurationMs, animStartTime, stateMachine.getState().name());
+            String state;
+            if (hardFaultActive) {
+                state = hardFaultState;
+            } else {
+                state = stateMachine.getState().name();
+                if (droneSubsystem.isCommunicationFailed(droneName)) {
+                    state = "commFailure";
+                }
+            }
+            droneSubsystem.sendStatus(droneName, batteryRemaining, currentZoneId, waterRemaining, targetZoneId, lastAnimDurationMs, animStartTime, state);
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private void triggerHardFault(Event.FaultType faultType) {
+        if (hardFaultActive) {
+            return;
+        }
+
+        String reason;
+        switch (faultType) {
+            case DRONE_STUCK:
+                hardFaultState = "droneStuckFault";
+                reason = "fault_drone_stuck";
+                break;
+            case ARRIVAL_SENSOR_FAILED:
+                hardFaultState = "arrivalSensorFault";
+                reason = "fault_arrival_sensor";
+                break;
+            case NOZZLE_STUCK_OPEN:
+                hardFaultState = "nozzleStuckFault";
+                reason = "fault_nozzle_stuck_open";
+                break;
+            default:
+                hardFaultState = "commFailure";
+                reason = "fault_unknown";
+                break;
+        }
+
+        hardFaultActive = true;
+        targetZoneId = 0;
+        System.out.println("[" + droneName + "] HARD FAULT triggered: " + hardFaultState);
+        try {
+            droneSubsystem.reportFault(droneName, reason);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        sendStatus();
     }
 
     @Override
@@ -120,9 +169,26 @@ public class Drone implements Runnable {
         sendStatus(); // initial status
         while(running) {
             try {
+                if (hardFaultActive) {
+                    sendStatus();
+                    Thread.sleep(500);
+                    continue;
+                }
+
+                if (droneSubsystem.isCommunicationFailed(droneName)) {
+                    sendStatus();
+                    Thread.sleep(500);
+                    continue;
+                }
+
                 switch(stateMachine.getState()) {
                     case idle:
                         event = droneSubsystem.requestTask(droneName);
+                        if (event == null) {
+                            sendStatus();
+                            Thread.sleep(250);
+                            break;
+                        }
                         event.deliverEvent(Event.State.DISPATCHED);
                         stateMachine.handleEvent(DroneEvent.fireAssigned);
                         sendStatus();
@@ -141,7 +207,18 @@ public class Drone implements Runnable {
                         lastAnimDurationMs = (long)(travelTime * 60 * Scheduler.simulationSpeed);
                         animStartTime = System.currentTimeMillis();
                         if (destZone != null) {
+                            long arrivalTimeoutMs = (long)(lastAnimDurationMs * ARRIVAL_TIMEOUT_FACTOR) + ARRIVAL_TIMEOUT_BUFFER_MS;
                             System.out.println("[" + droneName + "] Travelling for " + travelTime * 60 + "s");
+
+                            if (event.getFaultType() == Event.FaultType.DRONE_STUCK
+                                    || event.getFaultType() == Event.FaultType.ARRIVAL_SENSOR_FAILED) {
+                                // Simulate timeout-before-arrival fault injection for Iteration 4.
+                                Thread.sleep(arrivalTimeoutMs);
+                                triggerHardFault(event.getFaultType());
+                                event = null;
+                                break;
+                            }
+
                             Thread.sleep(lastAnimDurationMs);
                             useUpBattery(travelTime);
                             currentZoneId = destZone.id;
@@ -154,6 +231,12 @@ public class Drone implements Runnable {
                     case droppingAgent:
                         System.out.println("[" + droneName + "] Servicing fire at zone " + event.getZoneID());
                         event.deliverEvent(Event.State.DROPPING);
+                        if (event.getFaultType() == Event.FaultType.NOZZLE_STUCK_OPEN) {
+                            Thread.sleep(750);
+                            triggerHardFault(event.getFaultType());
+                            event = null;
+                            break;
+                        }
                         float emptyAmount = event.getWaterLeft();
                         if(emptyAmount > waterRemaining)
                             emptyAmount = waterRemaining;
