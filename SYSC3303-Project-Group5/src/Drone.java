@@ -25,6 +25,11 @@ public class Drone implements Runnable {
     private boolean hardFaultActive = false;
     private String hardFaultState = "idle";
 
+    private static String ts() {
+        return "[" + java.time.LocalDateTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS")) + "]";
+    }
+
     public Drone(DroneSubsystem droneSubsystem, String droneName, List<Zone> zones) {
         this.droneSubsystem = droneSubsystem;
         this.droneName = droneName;
@@ -155,7 +160,7 @@ public class Drone implements Runnable {
 
         hardFaultActive = true;
         targetZoneId = 0;
-        System.out.println("[" + droneName + "] HARD FAULT triggered: " + hardFaultState);
+        System.out.println(ts() + " [" + droneName + "] HARD FAULT triggered: " + hardFaultState);
         try {
             droneSubsystem.reportFault(droneName, reason);
         } catch (Exception e) {
@@ -170,8 +175,25 @@ public class Drone implements Runnable {
         while(running) {
             try {
                 if (hardFaultActive) {
+                    // Return to base after fault
+                    System.out.println(ts() + " [" + droneName + "] Returning to base after fault");
+                    float returnTime = 0;
+                    if (currentZoneId > 0) {
+                        try {
+                            Zone currentZoneV = Zone.getZoneFromId(zones, currentZoneId);
+                            returnTime = timeToOrigin(currentZoneV);
+                        } catch (Zone.UnknownZoneException ignored) { }
+                    }
+                    lastAnimDurationMs = (long)(returnTime * 60 * Scheduler.simulationSpeed);
+                    animStartTime = System.currentTimeMillis();
+                    targetZoneId = 0;
                     sendStatus();
-                    Thread.sleep(500);
+                    if (lastAnimDurationMs > 0) Thread.sleep(lastAnimDurationMs);
+                    currentZoneId = 0;
+                    targetZoneId = -1;
+                    sendStatus();
+                    System.out.println(ts() + " [" + droneName + "] Arrived at base, drone offline");
+                    running = false;
                     continue;
                 }
 
@@ -194,7 +216,7 @@ public class Drone implements Runnable {
                         sendStatus();
                         break;
                     case enRoute: {
-                        System.out.println("[" + droneName + "] Enroute to zone " + event.getZoneID());
+                        System.out.println(ts() + " [" + droneName + "] Enroute to zone " + event.getZoneID());
                         targetZoneId = event.getZoneID();
                         float travelTime = 0;
                         Zone destZone = null;
@@ -208,7 +230,7 @@ public class Drone implements Runnable {
                         animStartTime = System.currentTimeMillis();
                         if (destZone != null) {
                             long arrivalTimeoutMs = (long)(lastAnimDurationMs * ARRIVAL_TIMEOUT_FACTOR) + ARRIVAL_TIMEOUT_BUFFER_MS;
-                            System.out.println("[" + droneName + "] Travelling for " + travelTime * 60 + "s");
+                            System.out.println(ts() + " [" + droneName + "] Travelling for " + travelTime * 60 + "s");
 
                             if (event.getFaultType() == Event.FaultType.DRONE_STUCK
                                     || event.getFaultType() == Event.FaultType.ARRIVAL_SENSOR_FAILED) {
@@ -246,7 +268,7 @@ public class Drone implements Runnable {
                         useUpWater(emptyAmount);
                         event.useWater(emptyAmount);
                         if(event.getWaterLeft() <= 0) {
-                            System.out.println("[" + droneName + "] Fire extinguished");
+                            System.out.println(ts() + " [" + droneName + "] Fire extinguished");
                             event.deliverEvent(Event.State.EXTINGUISHED);
                             try {
                                 droneSubsystem.reportDone(event, droneName);

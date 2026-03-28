@@ -31,6 +31,11 @@ public class Scheduler implements Runnable {
     private boolean simulationStarted = false;
     private boolean endReceived = false;
 
+    private static String ts() {
+        return "[" + java.time.LocalDateTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS")) + "]";
+    }
+
     public Scheduler() throws Exception {
         socket = new DatagramSocket(SCHEDULER_PORT);
         socket.setSoTimeout(250);
@@ -106,6 +111,7 @@ public class Scheduler implements Runnable {
 
         switch (msg.getType()) {
             case EVENT:
+                System.out.println(ts() + " [Scheduler] Fire event received: zone=" + msg.getEvent().getZoneID() + " severity=" + msg.getEvent().getSeverity());
                 events.add(msg.getEvent());
                 sendMessage(new Message(Message.Type.ACK, null, "Event received"), FIRE_PORT);
                 if (gui != null) gui.addEvent(msg.getEvent());
@@ -113,6 +119,7 @@ public class Scheduler implements Runnable {
                 break;
             case REQUEST_TASK:
                 if (!isDroneFailed(msg.getNote())) {
+                    System.out.println(ts() + " [Scheduler] Drone idle: " + msg.getNote());
                     requestingDrones.add(msg.getNote());
                 }
                 assignTasks();
@@ -178,7 +185,7 @@ public class Scheduler implements Runnable {
             requestingDrones.remove(bestDrone);
             tasksAssigned.merge(bestDrone, 1, Integer::sum);
             activeAssignments.put(bestDrone, event);
-            System.out.println("[Scheduler] Dispatching " + bestDrone + " to zone " + event.getZoneID()
+            System.out.println(ts() + " [Scheduler] Dispatching " + bestDrone + " to zone " + event.getZoneID()
                     + " (tasks assigned: " + tasksAssigned.get(bestDrone) + ")");
             sendMessage(new Message(Message.Type.DISPATCH, event, bestDrone), DRONE_PORT);
         }
@@ -336,7 +343,11 @@ public class Scheduler implements Runnable {
 
         Event assigned = activeAssignments.remove(droneId);
         if (assigned != null && assigned.currentState() != Event.State.EXTINGUISHED) {
-            events.add(0, assigned);
+            // Re-queue without the fault so the next drone handles it normally
+            Event retry = new Event(assigned.getTime(), assigned.getZoneID(),
+                    assigned.getEventType(), assigned.getSeverity(), Event.FaultType.NONE);
+            retry.setWaterLeft(assigned.getWaterLeft());
+            events.add(0, retry);
         }
 
         DroneStatus prev = droneStatuses.get(droneId);
@@ -353,7 +364,7 @@ public class Scheduler implements Runnable {
             gui.updateDrone(failedStatus);
         }
 
-        System.out.println("[Scheduler] Marked " + droneId + " fault=" + faultState + " (" + reason + ")");
+        System.out.println(ts() + " [Scheduler] Marked " + droneId + " fault=" + faultState + " (" + reason + ")");
         try {
             if ("commFailure".equals(faultState)) {
                 sendMessage(Message.commFailure(droneId, reason), DRONE_PORT);

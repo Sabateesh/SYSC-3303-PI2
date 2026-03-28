@@ -23,6 +23,11 @@ public class DroneSubsystem implements Runnable {
     private static final int DRONE_PORT = 5002;
     private static final String HOST = "localhost";
 
+    private static String ts() {
+        return "[" + java.time.LocalDateTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS")) + "]";
+    }
+
     public DroneSubsystem() throws Exception {
         socket = new DatagramSocket(DRONE_PORT);
         socket.setSoTimeout(250);
@@ -235,7 +240,7 @@ public class DroneSubsystem implements Runnable {
             return;
         }
 
-        System.out.println("[DroneSubsystem] Communication failed for " + droneId + " (" + reason + ")");
+        System.out.println(ts() + " [DroneSubsystem] Communication failed for " + droneId + " (" + reason + ")");
         try {
             sendMessage(Message.commFailure(droneId, reason));
             sendStatus(droneId, Drone.BATTERY_SIZE, 0, Drone.TANK_SIZE, 0, 0, 0, "commFailure");
