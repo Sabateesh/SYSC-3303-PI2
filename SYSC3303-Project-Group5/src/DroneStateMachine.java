@@ -12,7 +12,11 @@ enum DroneState{
     enRoute,
     droppingAgent,
     returnForRefill,
-    returnOrigin
+    returnOrigin,
+    commFailure,
+    droneStuckFault,
+    arrivalSensorFault,
+    nozzleStuckFault
 }
 
 class DroneContext{
