@@ -15,7 +15,7 @@ public class SchedulerGUI extends JFrame {
         InRoute("In Route", new Color(60,130,220)),
         DroppingAgent("Dropping Agent", new Color(220,140,40)),
         Returning("Returning", new Color(160,100,200)),
-        Refilling("Refilling", new Color(80,180,180)),
+        Refilling("Refilling", new Color(80,180,180)),FaultStuck("Stuck (Fault)", new Color(220,50,50)),  FaultNozzle("Nozzle Jam (Offline)", new Color(160,20,20)),
         CommFailure("Comm Failure", new Color(190, 40, 40)),
         DroneStuckFault("Drone Stuck", new Color(168, 49, 49)),
         ArrivalSensorFault("Arrival Sensor Fault", new Color(196, 78, 0)),
@@ -36,6 +36,8 @@ public class SchedulerGUI extends JFrame {
     //data models
     private final DefaultTableModel droneTableModel;
     private final DefaultTableModel eventTableModel;
+    private final DefaultTableModel logTableModel;
+
     //zone map state
     private final List<ZoneRect> zones;
     private final List<Zone> zoneData;
@@ -52,11 +54,15 @@ public class SchedulerGUI extends JFrame {
     private final JLabel activeFiresLabel;
     private final JLabel droneSummeryLabel;
     private final JLabel statusLabel;
+    private final JLabel faultSummaryLabel;
+    private JComboBox<String> faultDroneSelector;
+    private JComboBox<String> faultTypeSelector;
+
 
     public SchedulerGUI(List<Zone> zoneData, Scheduler scheduler) {
-        super("PI3 - Firefighting Drone Swarm");
+        super("PI4 - Firefighting Drone Swarm");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1000, 650);
+        setSize(1200, 750);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(8, 8));
 
@@ -83,10 +89,10 @@ public class SchedulerGUI extends JFrame {
         zonesPanel = new ZonesPanel(zones, zoneFireStatus, zoneSeverity, droneMarkers);
         zonesPanel.setBorder(new TitledBorder("Zone Map"));
 
-        JPanel rightpPanel = new JPanel(new GridLayout(2,1,8,8));
+        JPanel rightPanel = new JPanel(new GridLayout(2,1,8,8));
         
         //drone table
-        String[] droneCols = {"Drone", "State", "Water (L)", "Zone", "Battery"};
+        String[] droneCols = {"Drone", "State", "Water (L)", "Zone", "Battery", "Fault"};
         droneTableModel = new DefaultTableModel(droneCols, 0){
             @Override
             public boolean isCellEditable(int row, int col){
@@ -105,6 +111,7 @@ public class SchedulerGUI extends JFrame {
         droneTable.getColumnModel().getColumn(1).setCellRenderer(new DroneStateCellRenderer());
         droneTable.getColumnModel().getColumn(2).setCellRenderer(new ReservoirRenderer());
         droneTable.getColumnModel().getColumn(4).setCellRenderer(new ProgressCellRenderer());
+        droneTable.getColumnModel().getColumn(5).setCellRenderer(new FaultCellRenderer());
         JPanel dronesPanel = new JPanel(new BorderLayout(6, 6));
         dronesPanel.setBorder(new TitledBorder("Drones"));
         dronesPanel.add(new JScrollPane(droneTable), BorderLayout.CENTER);
@@ -134,13 +141,54 @@ public class SchedulerGUI extends JFrame {
         JPanel eventsPanel = new JPanel(new BorderLayout(6, 6));
         eventsPanel.setBorder(new TitledBorder("Fire Incidents"));
         eventsPanel.add(new JScrollPane(eventTable), BorderLayout.CENTER);
-        
-        rightpPanel.add(dronesPanel);
-        rightpPanel.add(eventsPanel);
-        rightpPanel.setPreferredSize(new Dimension(420,0));
+
+        rightPanel.add(dronesPanel);
+        rightPanel.add(eventsPanel);
+        rightPanel.setPreferredSize(new Dimension(450,0));
+        JPanel bottomPanel = new JPanel(new BorderLayout(8, 4));
+        bottomPanel.setPreferredSize(new Dimension(0, 160));
+
+        String[] logCols = {"Timestamp", "Event"};
+        logTableModel = new DefaultTableModel(logCols, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        JTable logTable = new JTable(logTableModel);
+        logTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        logTable.setRowHeight(18);
+        logTable.getColumnModel().getColumn(0).setPreferredWidth(140);
+        logTable.getColumnModel().getColumn(0).setMaxWidth(160);
+        logTable.setRowSelectionAllowed(false);
+        JScrollPane logScroll = new JScrollPane(logTable);
+        JPanel logPanel = new JPanel(new BorderLayout());
+        logPanel.setBorder(new TitledBorder("Event Log (Timestamped)"));
+        logPanel.add(logScroll, BorderLayout.CENTER);
+
+        JPanel faultPanel = new JPanel();
+        faultPanel.setLayout(new BoxLayout(faultPanel, BoxLayout.Y_AXIS));
+        faultPanel.setBorder(new TitledBorder("Fault Injection"));
+        faultPanel.setPreferredSize(new Dimension(300, 0));
+        faultDroneSelector = new JComboBox<>();
+        faultTypeSelector = new JComboBox<>(new String[]{"Stuck Mid-Flight", "Nozzle Jammed"});
+        JButton injectBtn = new JButton("Inject Fault");
+        injectBtn.setBackground(new Color(220, 60, 60));
+        injectBtn.setForeground(Color.WHITE);
+        injectBtn.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        injectBtn.addActionListener(e -> injectFault());
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        row1.add(new JLabel("Drone:")); row1.add(faultDroneSelector);
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        row2.add(new JLabel("Fault:")); row2.add(faultTypeSelector);
+        JPanel row3 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        row3.add(injectBtn);
+        faultPanel.add(row1); faultPanel.add(row2); faultPanel.add(row3);
+
+        bottomPanel.add(logPanel, BorderLayout.CENTER);
+        bottomPanel.add(faultPanel, BorderLayout.EAST);
 
         add(zonesPanel, BorderLayout.CENTER);
-        add(rightpPanel, BorderLayout.EAST);
+        add(rightPanel, BorderLayout.EAST);
+        add(bottomPanel, BorderLayout.SOUTH);
+
 
         //top summery bar
         JPanel summerybar = new JPanel(new FlowLayout(FlowLayout.LEFT, 20,4));
@@ -153,13 +201,18 @@ public class SchedulerGUI extends JFrame {
         summerybar.add(activeFiresLabel);
         summerybar.add(Box.createHorizontalStrut(30));
         summerybar.add(droneSummeryLabel);
+        summerybar.add(Box.createHorizontalStrut(20));
+        faultSummaryLabel = new JLabel("Faults: 0");
+        faultSummaryLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        faultSummaryLabel.setForeground(new Color(200, 40, 40));
+        summerybar.add(faultSummaryLabel);
         add(summerybar,BorderLayout.NORTH);
 
         //bottom status bar
         statusLabel= new JLabel("Status: Waiting for sim to start... (Make sure to start 'FireIncidentSubsystem')");
         statusLabel.setBorder(BorderFactory.createEmptyBorder(4,8,4,8));
         statusLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN,12));
-        add(statusLabel,BorderLayout.SOUTH);
+        bottomPanel.add(statusLabel, BorderLayout.NORTH);
     }
 
     public synchronized void paintDrone(Drone d, int r) {
@@ -192,6 +245,12 @@ public class SchedulerGUI extends JFrame {
             case DroneState.nozzleStuckFault:
                 dsg = DroneStateGui.NozzleStuckFault;
                 break;
+            case DroneState.faultStuck:
+                dsg = DroneStateGui.FaultStuck;
+                break;
+            case DroneState.faultNozzle:
+                dsg = DroneStateGui.FaultNozzle;
+                break;
             default:
                 dsg = DroneStateGui.IDLE;
                 break;
@@ -210,12 +269,26 @@ public class SchedulerGUI extends JFrame {
             case DroneState.returnForRefill:
                 zoneDisplay = (d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base") + " → Base";
                 break;
+            case DroneState.faultStuck:
+                zoneDisplay = "STUCK" + (d.getTargetZoneId() > 0 ? " → Zone " + d.getTargetZoneId() : "");
+                break;
+            case DroneState.faultNozzle:
+                zoneDisplay = "OFFLINE" + (d.getCurrentZoneId() > 0 ? " @ Zone " + d.getCurrentZoneId() : "");
+                break;
             default:
                 zoneDisplay = d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base";
                 break;
         }
         droneTableModel.setValueAt(zoneDisplay, r, 3);
         droneTableModel.setValueAt(d.batteryPercent(), r, 4);
+        String faultText;
+        switch (d.getDroneState()) {
+            case DroneState.faultStuck:  faultText = "STUCK"; break;
+            case DroneState.faultNozzle: faultText = "NOZZLE JAM"; break;
+            default:                     faultText = "None"; break;
+        }
+        droneTableModel.setValueAt(faultText, r, 5);
+
 
         final int baseSlotX = 20 + r * 20;
         final int baseSlotY = 500;  
@@ -233,22 +306,51 @@ public class SchedulerGUI extends JFrame {
                 if (z.id == d.getTargetZoneId()) { toPx = z.fireX(); toPy = z.fireY(); break; }
             }
         } else if (d.getDroneState() == DroneState.returnOrigin || d.getDroneState() == DroneState.returnForRefill) {
-            // from: current fire zone, to: the base station
             if (d.getCurrentZoneId() > 0) {
                 for (ZoneRect z : zones) {
                     if (z.id == d.getCurrentZoneId()) { fromPx = z.fireX(); fromPy = z.fireY(); break; }
                 }
             }
             toPx = baseSlotX; toPy = baseSlotY;
+        } else if (d.getDroneState() == DroneState.faultStuck) {
+            if (d.getCurrentZoneId() > 0) {
+                for (ZoneRect z : zones) { if (z.id == d.getCurrentZoneId()) { fromPx = z.fireX(); fromPy = z.fireY(); break; } }
+            } else { fromPx = baseSlotX; fromPy = baseSlotY; }
+            if (d.getTargetZoneId() > 0) {
+                for (ZoneRect z : zones) { if (z.id == d.getTargetZoneId()) { toPx = z.fireX(); toPy = z.fireY(); break; } }
+            } else { toPx = fromPx; toPy = fromPy; }
+        } else if (d.getDroneState() == DroneState.faultNozzle) {
+            if (d.getCurrentZoneId() > 0) {
+                for (ZoneRect z : zones) { if (z.id == d.getCurrentZoneId()) { fromPx = toPx = z.fireX(); fromPy = toPy = z.fireY(); break; } }
+            }
         } else if (d.getCurrentZoneId() > 0) {
             for (ZoneRect z : zones) {
                 if (z.id == d.getCurrentZoneId()) { fromPx = toPx = z.fireX(); fromPy = toPy = z.fireY(); break; }
             }
         }
+
+
+
+
         long animStart = d.getAnimStartTime();
         droneMarkers.put(d.getDroneName(), new DroneMarker(
                 d.getDroneName(), d.getCurrentZoneId(), d.getTargetZoneId(), dsg,
                 fromPx, fromPy, toPx, toPy, animStart, d.getLastAnimDurationMs()));
+
+        updateFaultDroneSelector();
+
+    }
+
+    private void updateFaultDroneSelector() {
+        Set<String> current = new HashSet<>();
+        for (int i = 0; i < faultDroneSelector.getItemCount(); i++) current.add(faultDroneSelector.getItemAt(i));
+        for (Drone d : drones) {
+            String name = d.getDroneName();
+            if (!current.contains(name) && d.getDroneState() != DroneState.faultNozzle) {
+                faultDroneSelector.addItem(name);
+                current.add(name);
+            }
+        }
     }
 
     public synchronized void paintDrone(Drone d) {
@@ -338,6 +440,7 @@ public class SchedulerGUI extends JFrame {
 
     public synchronized void addEvent(Event event) {
         if(!events.contains(event)) events.add(event);
+        logEvent("Fire detected: Zone " + event.getZoneID() + " | Severity: " + event.getSeverity());
         SwingUtilities.invokeLater(this::paintAllEvents);
     }
 
@@ -349,6 +452,7 @@ public class SchedulerGUI extends JFrame {
                 break;
             }
         }
+        logEvent("Event update: Zone " + event.getZoneID() + " → " + event.currentState().toString());
         SwingUtilities.invokeLater(this::paintAllEvents);
     }
 
@@ -390,6 +494,7 @@ public class SchedulerGUI extends JFrame {
     //set bottom status bar
     public void setStatus(boolean status){
         String text = status ? "▶ Simulation started" : "■ Simulation complete";
+        logEvent(status ? "Simulation STARTED" : "Simulation COMPLETE");
         SwingUtilities.invokeLater(()-> {
             statusLabel.setText(text);
             if(status)
@@ -408,14 +513,22 @@ public class SchedulerGUI extends JFrame {
         activeFiresLabel.setText("Active Fires:" + activeFires);
 
         int total = drones.size();
-        long idle = 0, InRoute = 0 , dropping = 0;
+        long idle = 0, InRoute = 0 , dropping = 0 ;
+        long fStuck = 0, fNozzle = 0;
+
         for (Drone d : drones) {
             if (d.getDroneState() == DroneState.idle) idle++;
             if (d.getDroneState() == DroneState.enRoute) InRoute++;
             if (d.getDroneState() == DroneState.droppingAgent) dropping++;
+            if (d.getDroneState() == DroneState.faultStuck) fStuck++;
+            if (d.getDroneState() == DroneState.faultNozzle) fNozzle++;
         }
         droneSummeryLabel.setText(String.format(
             "Drones: %d total | %d idle | %d en route | %d dropping", total, idle, InRoute, dropping));
+        long totalFaults = fStuck + fNozzle;
+        faultSummaryLabel.setText(totalFaults > 0
+                ? String.format("Faults: %d (%d stuck, %d nozzle)", totalFaults, fStuck, fNozzle)
+                : "Faults: 0");
     }
 
     //load zones from csv 
@@ -469,6 +582,9 @@ public class SchedulerGUI extends JFrame {
         final int toPixelX,   toPixelY;
         final long animStartTime;
         final long animDurationMs;
+        boolean isFaulted() { return state == DroneStateGui.FaultStuck || state == DroneStateGui.FaultNozzle; }
+
+
 
         DroneMarker(String name, int zoneId, int targetZoneId, DroneStateGui state,
                     int fromPixelX, int fromPixelY, int toPixelX, int toPixelY,
@@ -489,6 +605,11 @@ public class SchedulerGUI extends JFrame {
             boolean moving = state == DroneStateGui.InRoute
                     || state == DroneStateGui.Returning
                     || state == DroneStateGui.Refilling;
+            if (state == DroneStateGui.FaultStuck) {
+                if (animDurationMs <= 0) return 0.5f;
+                float t = (System.currentTimeMillis() - animStartTime) / (float) animDurationMs;
+                return Math.min(1f, Math.max(0f, t));
+            }
             if (!moving || animDurationMs <= 0) return 1f;
             float t = (System.currentTimeMillis() - animStartTime) / (float) animDurationMs;
             return Math.min(1f, Math.max(0f, t));
@@ -614,8 +735,12 @@ public class SchedulerGUI extends JFrame {
             for (DroneMarker dm : drones.values()) {
                 boolean enRoute  = dm.state == DroneStateGui.InRoute;
                 boolean returning = dm.state == DroneStateGui.Returning || dm.state == DroneStateGui.Refilling;
-                if (!enRoute && !returning) continue;
-                Color lineColor = enRoute ? new Color(60, 130, 220, 180) : new Color(150, 90, 200, 160);
+                boolean stuck = dm.state == DroneStateGui.FaultStuck;
+                if (!enRoute && !returning && !stuck) continue;
+                Color lineColor;
+                if (stuck) lineColor = new Color(220, 50, 50, 180);
+                else if (enRoute) lineColor = new Color(60, 130, 220, 180);
+                else lineColor = new Color(150, 90, 200, 160);
                 g2.setColor(lineColor);
                 g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
                         0, new float[]{8, 5}, 0));
@@ -649,10 +774,13 @@ public class SchedulerGUI extends JFrame {
                 int cx = dm.currentPixelX();
                 int cy = dm.currentPixelY();
                 String shortName = "D" + dm.name.replaceAll("[^0-9]", "");
-                String label = dm.state == DroneStateGui.InRoute
-                        ? shortName + "→" + dm.targetZoneId
-                        : shortName;
-                drawDroneIcon(g2, cx, cy, dm.state.getColor(), label);
+                String label;
+                if (dm.isFaulted()) label = shortName + (dm.state == DroneStateGui.FaultStuck ? " !" : " X");
+                else if (dm.state == DroneStateGui.InRoute) label = shortName + "→" + dm.targetZoneId;
+                else label = shortName;
+
+                if (dm.isFaulted()) drawFaultDroneIcon(g2, cx, cy, dm.state.getColor(), label, dm.state);
+                else drawDroneIcon(g2, cx, cy, dm.state.getColor(), label);
             }
             g2.dispose();
         }
@@ -741,6 +869,45 @@ public class SchedulerGUI extends JFrame {
             g2.setColor(Color.WHITE);
             g2.drawString(label, cx - lw/2, cy + 19);
         }
+        private void drawFaultDroneIcon(Graphics2D g2, int cx, int cy, Color color, String label, DroneStateGui faultState) {
+            long t = System.currentTimeMillis();
+            float pulse = (float)(0.5 + 0.5 * Math.sin(t / 300.0));
+            int glowAlpha = (int)(60 + 80 * pulse);
+            int glowSize = (int)(22 + 6 * pulse);
+            g2.setColor(new Color(255, 40, 40, glowAlpha));
+            g2.fillOval(cx - glowSize, cy - glowSize, glowSize * 2, glowSize * 2);
+            int arm = 11; int rw = 14, rh = 7;
+            g2.setColor(new Color(100, 40, 40));
+            g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(cx-arm, cy-arm, cx+arm, cy+arm);
+            g2.drawLine(cx+arm, cy-arm, cx-arm, cy+arm);
+            int[][] rp = {{cx-arm-rw/2,cy-arm-rh/2},{cx+arm-rw/2,cy-arm-rh/2},{cx-arm-rw/2,cy+arm-rh/2},{cx+arm-rw/2,cy+arm-rh/2}};
+            for (int[] r : rp) {
+                g2.setColor(new Color(200,180,180,210)); g2.fillOval(r[0],r[1],rw,rh);
+                g2.setColor(new Color(150,80,80)); g2.setStroke(new BasicStroke(0.8f)); g2.drawOval(r[0],r[1],rw,rh);
+            }
+            g2.setColor(color); g2.fillOval(cx-8,cy-8,16,16);
+            g2.setColor(color.darker()); g2.setStroke(new BasicStroke(1.5f)); g2.drawOval(cx-8,cy-8,16,16);
+            if (faultState == DroneStateGui.FaultNozzle) {
+                g2.setColor(Color.WHITE);
+                g2.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(cx-5, cy-5, cx+5, cy+5);
+                g2.drawLine(cx+5, cy-5, cx-5, cy+5);
+            } else {
+                g2.setColor(new Color(255, 220, 40));
+                int[] triX = {cx, cx-6, cx+6}; int[] triY = {cy-6, cy+4, cy+4};
+                g2.fillPolygon(triX, triY, 3);
+                g2.setColor(new Color(80, 60, 0));
+                g2.setFont(getFont().deriveFont(Font.BOLD, 8f));
+                g2.drawString("!", cx-2, cy+3);
+            }
+            g2.setFont(getFont().deriveFont(Font.BOLD, 9f));
+            FontMetrics fm = g2.getFontMetrics();
+            int lw = fm.stringWidth(label);
+            g2.setColor(new Color(120, 20, 20, 220)); g2.fillRoundRect(cx-lw/2-2, cy+12, lw+4, 11, 4, 4);
+            g2.setColor(new Color(255, 200, 200)); g2.drawString(label, cx-lw/2, cy+21);
+        }
+
     }
     //cell renderer for drone state column
     static class DroneStateCellRenderer extends DefaultTableCellRenderer {
@@ -858,6 +1025,46 @@ public class SchedulerGUI extends JFrame {
             return this;
         }
     }
+    public void logEvent(String message) {
+        String ts = new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date());
+        SwingUtilities.invokeLater(() -> logTableModel.addRow(new Object[]{ts, message}));
+    }
+    private void injectFault() {
+        String selectedDrone = (String) faultDroneSelector.getSelectedItem();
+        if (selectedDrone == null || selectedDrone.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No drone selected.", "Fault Injection", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        String faultType = (String) faultTypeSelector.getSelectedItem();
+        String faultCode = faultType.contains("Stuck") ? "STUCK" : "NOZZLE";
+        logEvent("FAULT INJECTED: " + faultCode + " on " + selectedDrone);
+        if (scheduler != null) {
+            try { scheduler.injectFault(selectedDrone, faultCode); }
+            catch (Exception ex) { logEvent("ERROR injecting fault: " + ex.getMessage()); }
+        }
+    }
+    static class FaultCellRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                                                       boolean isSelected, boolean hasFocus, int row, int col) {
+            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
+            if (value != null) {
+                String fault = value.toString();
+                if (fault.equals("STUCK")) {
+                    c.setForeground(new Color(220, 120, 20)); c.setBackground(new Color(255, 245, 220));
+                    setFont(getFont().deriveFont(Font.BOLD)); setText("\u26A0 STUCK");
+                } else if (fault.equals("NOZZLE JAM")) {
+                    c.setForeground(new Color(180, 20, 20)); c.setBackground(new Color(255, 220, 220));
+                    setFont(getFont().deriveFont(Font.BOLD)); setText("\u2716 NOZZLE JAM");
+                } else {
+                    c.setForeground(new Color(100, 160, 100)); c.setBackground(Color.WHITE);
+                    setFont(getFont().deriveFont(Font.PLAIN)); setText("\u2714 None");
+                }
+            }
+            return c;
+        }
+    }
+
 }
 
 
