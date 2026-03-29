@@ -487,6 +487,11 @@ public class Scheduler implements Runnable {
         }
     }
 
+    public void injectFault(String droneId, String faultCode) throws Exception {
+        System.out.println("[Scheduler] Injecting fault: " + faultCode + " on " + droneId);
+        sendMessage(new Message(Message.Type.FAULT_INJECT, null, droneId + "," + faultCode), DRONE_PORT);
+    }
+
     public static class DroneStatus {
         String id;
         float battery;

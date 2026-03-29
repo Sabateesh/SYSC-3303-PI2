@@ -299,6 +299,12 @@ public class DroneSubsystem implements Runnable {
                     } else if (msg.getType() == Message.Type.COMM_FAILURE) {
                         String failedDrone = extractDroneId(msg);
                         markCommunicationFailed(failedDrone, "scheduler_reported");
+                    } else if (msg.getType() == Message.Type.FAULT_INJECT) {
+                        String[] faultParts = msg.getNote().split(",");
+                        String targetDrone = faultParts[0];
+                        String faultCode = faultParts.length > 1 ? faultParts[1] : "STUCK";
+                        String reason = "gui_injected_" + faultCode.toLowerCase();
+                        markCommunicationFailed(targetDrone, reason);
                     }
                 } catch (SocketTimeoutException e) {
                     checkResendTimeouts();

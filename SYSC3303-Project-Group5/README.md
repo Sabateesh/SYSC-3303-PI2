@@ -1,4 +1,4 @@
-# SYSC3303A — Iteration 3, Group 5
+# SYSC3303A — Iteration 4, Group 5
 ## Included Files
 - `README.md` (contains info and instructions)
 - `Sample_event_file.csv` (contains sample events)
@@ -31,6 +31,6 @@
 
 ## Responsibilities
 - UDP communication between scheduler and subsystems, UDP message test class, updates to GUI based on scheduler datagrams (Faraaz, 101298165)
-- UML sequence and class diagrams, GUI updates to information based on fire info, display drone path (Sabateesh, 101259947)
+- Diagrams  (Aymen, 101326354)
 - Update drone subsystem UDP communications, packet handling and registration with scheduler (Aymen, 101326354)
-- GUI visual changes and reorganization, updated GUI to show drone position, animations for visual feedback (Ibrahim, 101235067)
+- GUI  changes and , updated GUI to show drone faults handling (Sabateesh, 101259947)

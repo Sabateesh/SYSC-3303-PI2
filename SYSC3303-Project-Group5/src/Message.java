@@ -18,7 +18,8 @@ public class Message implements Serializable {
         START,          // Fire -> Scheduler (simulation start)
         END_SIMULATION, // Fire -> Scheduler (simulation end)
         RESEND_REQUEST, // Receiver -> Sender (request resend after corruption)
-        COMM_FAILURE    // Sender/Receiver -> Peer (communications failed)
+        COMM_FAILURE,    // Sender/Receiver -> Peer (communications failed)'
+        FAULT_INJECT
     }
 
     private final Type type;

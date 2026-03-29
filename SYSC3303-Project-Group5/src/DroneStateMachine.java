@@ -16,7 +16,10 @@ enum DroneState{
     commFailure,
     droneStuckFault,
     arrivalSensorFault,
-    nozzleStuckFault
+    nozzleStuckFault,
+    faultStuck,
+    faultNozzle
+
 }
 
 class DroneContext{
