@@ -3,12 +3,7 @@
 - `README.md` (contains info and instructions)
 - `Sample_event_file.csv` (contains sample events)
 - `sample_zone_file.csv` (contains sample events)
-- `P3StateMachine_Drone.png` (Drone state machine)
-- `P3StateMachine_Drone.png` (Scheduler state machine)
-- `PI3ClassDiagram.png` (UML class diagram )
-- `PI3SequenceDiagram_Deploy.png` (Deploy drone sequence diagram)
-- `PI3SequenceDiagram_Initalization.png` (Initialization sequence diagram)
-- `PI3SequenceDiagram_Refill.png` (Refill sequence diagram)
+- `P4StateMachine_Drone.png` (Drone state machine)
 - `src/Main.java` (main program)
 - `src/Drone.java` (represents a single drone which is assigned an event)
 - `src/DroneSubsystem.java` (the drone subsystem with multiple drones and which assigned tasks to drones)
@@ -22,6 +17,7 @@
 - `src/Scheduler.java` (scheduler for the tasks)
 - `src/UdpCommunicationJUnitTest.java` (tests for UDP communication)
 - `src/Zone.java` (zone class to keep track of individual zones)
+- `src/PacketLossDetectionJUnitTest.java` (tests for packet losses)
 
 ## Detailed Instructions
 1. Open the project in IntelliJ Idea
@@ -30,7 +26,8 @@
 4. Run the `FireIncidentSubsystem.java` file. This starts the Fire Incident Subsystem
 
 ## Responsibilities
-- UDP communication between scheduler and subsystems, UDP message test class, updates to GUI based on scheduler datagrams (Faraaz, 101298165)
+- Implemented drone faults and drone fault detection, crc checksum redundancy in UDP messages, marking drones as faulty when detected (Faraaz, 101298165)
 - Diagram, updated the drone state machine (Aymen, 101326354)
 - Update drone subsystem UDP communications, packet handling and registration with scheduler (Aymen, 101326354)
+- Drone fault handling, returning faulty drones to base station, redistributing tasks when drone failure occurs, etc (Ibrahim)
 - GUI  changes and , updated GUI to show drone faults handling (Sabateesh, 101259947)
