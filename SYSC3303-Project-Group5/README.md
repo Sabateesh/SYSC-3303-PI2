@@ -31,6 +31,6 @@
 
 ## Responsibilities
 - UDP communication between scheduler and subsystems, UDP message test class, updates to GUI based on scheduler datagrams (Faraaz, 101298165)
-- Diagrams  (Aymen, 101326354)
+- Diagram, updated the drone state machine (Aymen, 101326354)
 - Update drone subsystem UDP communications, packet handling and registration with scheduler (Aymen, 101326354)
 - GUI  changes and , updated GUI to show drone faults handling (Sabateesh, 101259947)
