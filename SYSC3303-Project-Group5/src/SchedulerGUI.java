@@ -270,9 +270,13 @@ public class SchedulerGUI extends JFrame {
                 zoneDisplay = (d.getCurrentZoneId() > 0 ? "Zone " + d.getCurrentZoneId() : "Base") + " → Base";
                 break;
             case DroneState.faultStuck:
+            case DroneState.droneStuckFault:
+            case DroneState.arrivalSensorFault:
+            case DroneState.commFailure:
                 zoneDisplay = "STUCK" + (d.getTargetZoneId() > 0 ? " → Zone " + d.getTargetZoneId() : "");
                 break;
             case DroneState.faultNozzle:
+            case DroneState.nozzleStuckFault:
                 zoneDisplay = "OFFLINE" + (d.getCurrentZoneId() > 0 ? " @ Zone " + d.getCurrentZoneId() : "");
                 break;
             default:
@@ -283,9 +287,16 @@ public class SchedulerGUI extends JFrame {
         droneTableModel.setValueAt(d.batteryPercent(), r, 4);
         String faultText;
         switch (d.getDroneState()) {
-            case DroneState.faultStuck:  faultText = "STUCK"; break;
-            case DroneState.faultNozzle: faultText = "NOZZLE JAM"; break;
-            default:                     faultText = "None"; break;
+            case DroneState.faultStuck:
+            case DroneState.droneStuckFault:
+            case DroneState.arrivalSensorFault:
+            case DroneState.commFailure:
+                faultText = "STUCK"; break;
+            case DroneState.faultNozzle:
+            case DroneState.nozzleStuckFault:
+                faultText = "NOZZLE JAM"; break;
+            default:
+                faultText = "None"; break;
         }
         droneTableModel.setValueAt(faultText, r, 5);
 
@@ -515,13 +526,16 @@ public class SchedulerGUI extends JFrame {
         int total = drones.size();
         long idle = 0, InRoute = 0 , dropping = 0 ;
         long fStuck = 0, fNozzle = 0;
-
         for (Drone d : drones) {
             if (d.getDroneState() == DroneState.idle) idle++;
             if (d.getDroneState() == DroneState.enRoute) InRoute++;
             if (d.getDroneState() == DroneState.droppingAgent) dropping++;
-            if (d.getDroneState() == DroneState.faultStuck) fStuck++;
-            if (d.getDroneState() == DroneState.faultNozzle) fNozzle++;
+            if (d.getDroneState() == DroneState.faultStuck
+                    || d.getDroneState() == DroneState.droneStuckFault
+                    || d.getDroneState() == DroneState.arrivalSensorFault) fStuck++;
+            if (d.getDroneState() == DroneState.faultNozzle
+                    || d.getDroneState() == DroneState.nozzleStuckFault) fNozzle++;
+            if (d.getDroneState() == DroneState.commFailure) fStuck++; // count comm failures too
         }
         droneSummeryLabel.setText(String.format(
             "Drones: %d total | %d idle | %d en route | %d dropping", total, idle, InRoute, dropping));
