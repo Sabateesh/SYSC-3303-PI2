@@ -58,11 +58,7 @@ public class FireIncidentSubsystem implements Runnable {
             int zoneId = Integer.parseInt(parts[1].trim());
             Event.EventType eventType = Event.parseEventType(parts[2].trim());
             Event.Severity severity = Event.parseSeverity(parts[3].trim());
-            Event.FaultType faultType = Event.FaultType.NONE;
-            if (parts.length >= 5) {
-                faultType = Event.parseFaultType(parts[4].trim());
-            }
-            Event event = new Event(time, zoneId, eventType, severity, faultType);
+            Event event = new Event(time, zoneId, eventType, severity);
             events.add(event);
         } catch (Exception e) {
             System.err.println("[" + threadName + "] error parsing event line '" + line + "': " + e.getMessage());

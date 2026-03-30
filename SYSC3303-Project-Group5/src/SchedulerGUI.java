@@ -168,7 +168,7 @@ public class SchedulerGUI extends JFrame {
         faultPanel.setBorder(new TitledBorder("Fault Injection"));
         faultPanel.setPreferredSize(new Dimension(300, 0));
         faultDroneSelector = new JComboBox<>();
-        faultTypeSelector = new JComboBox<>(new String[]{"Stuck Mid-Flight", "Nozzle Jammed"});
+        faultTypeSelector = new JComboBox<>(new String[]{"Stuck Mid-Flight", "Nozzle Jammed", "Communications Corruption"});
         JButton injectBtn = new JButton("Inject Fault");
         injectBtn.setBackground(new Color(220, 60, 60));
         injectBtn.setForeground(Color.WHITE);
@@ -1050,7 +1050,14 @@ public class SchedulerGUI extends JFrame {
             return;
         }
         String faultType = (String) faultTypeSelector.getSelectedItem();
-        String faultCode = faultType.contains("Stuck") ? "STUCK" : "NOZZLE";
+        String faultCode;
+        if (faultType != null && faultType.contains("Communications")) {
+            faultCode = "COMM_CORRUPT";
+        } else if (faultType != null && faultType.contains("Stuck")) {
+            faultCode = "STUCK";
+        } else {
+            faultCode = "NOZZLE";
+        }
         logEvent("FAULT INJECTED: " + faultCode + " on " + selectedDrone);
         if (scheduler != null) {
             try { scheduler.injectFault(selectedDrone, faultCode); }

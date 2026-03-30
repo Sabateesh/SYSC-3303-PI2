@@ -14,10 +14,12 @@ public class DroneSubsystem implements Runnable {
     private final Map<String, Integer> resendCounts = new HashMap<>();
     private final Map<String, PendingResend> pendingResends = new HashMap<>();
     private final Set<String> communicationFailedDrones = new HashSet<>();
+    private final Map<String, Integer> outboundCorruptionBudget = new HashMap<>();
     private long lastReceivedSequenceFromScheduler = -1;
     private static final long MAX_SEQUENCE_GAP = 5;
     private static final long RESEND_TIMEOUT_MS = 2500;
     private static final int MAX_RESEND_ATTEMPTS = 1;
+    private static final int INJECTED_CORRUPT_PACKETS = 2;
 
     private static final int SCHEDULER_PORT = 5000;
     private static final int DRONE_PORT = 5002;
@@ -53,6 +55,14 @@ public class DroneSubsystem implements Runnable {
         out.writeObject(msg);
         out.flush();
         byte[] data = bos.toByteArray();
+
+        String sourceDrone = extractDroneId(msg);
+        if (shouldCorruptOutbound(msg, sourceDrone)) {
+            data = corruptSerializedPayload(data, msg);
+            System.out.println(ts() + " [DroneSubsystem] Injected comm corruption for " + sourceDrone
+                    + " on " + msg.getType() + " (messageId=" + msg.getMessageId() + ")");
+        }
+
         DatagramPacket packet = new DatagramPacket(data, data.length, InetAddress.getByName(HOST), SCHEDULER_PORT);
         socket.send(packet);
 
@@ -216,6 +226,64 @@ public class DroneSubsystem implements Runnable {
         }
     }
 
+    private boolean shouldCorruptOutbound(Message msg, String droneId) {
+        if (droneId == null || droneId.isEmpty()) {
+            return false;
+        }
+        // Corrupt only status packets so droneId parsing remains stable on Scheduler side.
+        if (msg.getType() != Message.Type.DRONE_STATUS) {
+            return false;
+        }
+        Integer remaining = outboundCorruptionBudget.get(droneId);
+        if (remaining == null || remaining <= 0) {
+            return false;
+        }
+        outboundCorruptionBudget.put(droneId, remaining - 1);
+        return true;
+    }
+
+    private byte[] corruptSerializedPayload(byte[] data, Message msg) {
+        byte[] corrupted = Arrays.copyOf(data, data.length);
+        String note = msg.getNote();
+        if (note != null && !note.isEmpty()) {
+            byte[] noteBytes = note.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            int idx = findSubsequence(corrupted, noteBytes);
+            if (idx >= 0) {
+                // Keep the drone id (prefix before first comma) intact; corrupt later payload bytes.
+                int relativeOffset = Math.max(1, note.indexOf(',') + 1);
+                if (relativeOffset >= noteBytes.length) {
+                    relativeOffset = noteBytes.length - 1;
+                }
+                corrupted[idx + relativeOffset] = (byte) (corrupted[idx + relativeOffset] ^ 0x01);
+                return corrupted;
+            }
+        }
+
+        // Fallback: flip a byte near the end to avoid object stream headers.
+        int pos = Math.max(0, corrupted.length - 8);
+        corrupted[pos] = (byte) (corrupted[pos] ^ 0x01);
+        return corrupted;
+    }
+
+    private int findSubsequence(byte[] haystack, byte[] needle) {
+        if (needle.length == 0 || haystack.length < needle.length) {
+            return -1;
+        }
+        for (int i = 0; i <= haystack.length - needle.length; i++) {
+            boolean match = true;
+            for (int j = 0; j < needle.length; j++) {
+                if (haystack[i + j] != needle[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private String extractDroneId(Message msg) {
         if (msg.getNote() == null || msg.getNote().isEmpty()) {
             return null;
@@ -303,8 +371,14 @@ public class DroneSubsystem implements Runnable {
                         String[] faultParts = msg.getNote().split(",");
                         String targetDrone = faultParts[0];
                         String faultCode = faultParts.length > 1 ? faultParts[1] : "STUCK";
-                        String reason = "gui_injected_" + faultCode.toLowerCase();
-                        markCommunicationFailed(targetDrone, reason);
+                        if ("COMM_CORRUPT".equalsIgnoreCase(faultCode)) {
+                            outboundCorruptionBudget.put(targetDrone, INJECTED_CORRUPT_PACKETS);
+                            System.out.println(ts() + " [DroneSubsystem] Armed comm corruption for " + targetDrone
+                                    + " (next " + INJECTED_CORRUPT_PACKETS + " outbound packets)");
+                        } else {
+                            String reason = "gui_injected_" + faultCode.toLowerCase();
+                            markCommunicationFailed(targetDrone, reason);
+                        }
                     }
                 } catch (SocketTimeoutException e) {
                     checkResendTimeouts();

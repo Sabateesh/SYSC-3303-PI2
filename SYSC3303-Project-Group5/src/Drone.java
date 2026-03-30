@@ -152,6 +152,10 @@ public class Drone implements Runnable {
                 hardFaultState = "nozzleStuckFault";
                 reason = "fault_nozzle_stuck_open";
                 break;
+            case COMM_FAILURE:
+                hardFaultState = "commFailure";
+                reason = "fault_unknown";
+                break;
             default:
                 hardFaultState = "commFailure";
                 reason = "fault_unknown";

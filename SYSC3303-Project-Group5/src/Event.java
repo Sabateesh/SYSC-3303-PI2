@@ -23,7 +23,8 @@ public class Event implements Serializable {
         NONE,
         DRONE_STUCK,
         ARRIVAL_SENSOR_FAILED,
-        NOZZLE_STUCK_OPEN
+        NOZZLE_STUCK_OPEN,
+        COMM_FAILURE
     }
     public enum State {
         INACTIVE,
