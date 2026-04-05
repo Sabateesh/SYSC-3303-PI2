@@ -111,7 +111,7 @@ public class FireIncidentSubsystem implements Runnable {
     @Override
     public void run() {
         try {
-            socket = new DatagramSockets(FIRE_PORT);
+            socket = new DatagramSocket(FIRE_PORT);
         } catch (Exception e) {
             e.printStackTrace();
             return;

@@ -6,7 +6,7 @@ public class DroneSubsystem implements Runnable {
 
     private DatagramSocket socket;
     private final List<Zone> zones;
-    public final static int NUM_DRONES = 3;
+    public final static int NUM_DRONES = 20;
     private final List<Thread> droneThreads;
     private final Map<String, Queue<Event>> taskQueues = new HashMap<>();
     private final Object taskLock = new Object();
