@@ -16,8 +16,8 @@ public class Drone implements Runnable {
     private final List<Zone> zones;
     private int currentZoneId = 0;
     private int targetZoneId = 0;
-    private long lastAnimDurationMs = 0;  
-    private long animStartTime = 0;       
+    private long lastAnimDurationMs = 0;
+    private long animStartTime = 0;
     private float waterRemaining;
     private float batteryRemaining;
     private final String droneName;
@@ -25,7 +25,6 @@ public class Drone implements Runnable {
     private boolean hardFaultActive = false;
     private String hardFaultState = "idle";
     private boolean stuckMidFlightLatched = false;
-    private boolean nozzleRecoveryActive = false;
 
     private static String ts() {
         return "[" + java.time.LocalDateTime.now()
@@ -55,11 +54,11 @@ public class Drone implements Runnable {
         this.lastAnimDurationMs = lastAnimDurationMs;
         this.animStartTime = animStartTime;
         this.event = null;
-       try {
-           this.guiState = DroneState.valueOf(state);
-       } catch (IllegalArgumentException e) {
-           this.guiState=DroneState.idle;
-       }
+        try {
+            this.guiState = DroneState.valueOf(state);
+        } catch (IllegalArgumentException e) {
+            this.guiState=DroneState.idle;
+        }
     }
 
     public String getDroneName() {
@@ -129,10 +128,6 @@ public class Drone implements Runnable {
                     state = "commFailure";
                 }
             }
-            // Encode active nozzle fault separately so GUI can show fault while still animating returnOrigin.
-            if (nozzleRecoveryActive) {
-                state = state + "|nozzleStuckFault";
-            }
             droneSubsystem.sendStatus(droneName, batteryRemaining, currentZoneId, waterRemaining, targetZoneId, lastAnimDurationMs, animStartTime, state);
         } catch (Exception e) {
             e.printStackTrace();
@@ -194,7 +189,7 @@ public class Drone implements Runnable {
 
         hardFaultActive = true;
         targetZoneId = 0;
-        System.out.println(ts() + " [" + droneName + "] HARD FAULT triggered: " + hardFaultState);
+        System.out.println(ts() + " [" + droneName + "] FAULT triggered: " + hardFaultState);
         try {
             droneSubsystem.reportFault(droneName, reason);
         } catch (Exception e) {
@@ -203,58 +198,68 @@ public class Drone implements Runnable {
         sendStatus();
     }
 
+    /** Helper: fly back to base with animation */
+    private void returnToBase() throws InterruptedException {
+        float returnTime = 0;
+        if (currentZoneId > 0) {
+            try {
+                Zone currentZoneV = Zone.getZoneFromId(zones, currentZoneId);
+                returnTime = timeToOrigin(currentZoneV);
+            } catch (Zone.UnknownZoneException ignored) { }
+        }
+        lastAnimDurationMs = (long)(returnTime * 60 * Scheduler.simulationSpeed);
+        animStartTime = System.currentTimeMillis();
+        targetZoneId = 0;
+        hardFaultState = "returnOrigin";
+        sendStatus();
+        if (lastAnimDurationMs > 0) Thread.sleep(lastAnimDurationMs);
+        currentZoneId = 0;
+        targetZoneId = -1;
+    }
+
+    /** Helper: reset drone to idle after transient fault */
+    private void resetToIdle() {
+        stuckMidFlightLatched = false;
+        hardFaultActive = false;
+        hardFaultState = "idle";
+        event = null;
+        setDroneFull();
+        if (stateMachine.getState() == DroneState.returnOrigin) {
+            stateMachine.handleEvent(DroneEvent.arrivedToOrigin);
+        }
+        System.out.println(ts() + " [" + droneName + "] Reset complete, back in service");
+        sendStatus();
+    }
+
     @Override
     public void run() {
         sendStatus(); // initial status
         while(running) {
             try {
+                // ===== TRANSIENT FAULT: stuck mid-flight (latched by GUI injection) =====
                 if (stuckMidFlightLatched) {
-                    // Stay frozen mid-flight so Scheduler can detect arrival timeout and reassign.
+                    System.out.println(ts() + " [" + droneName + "] Stuck mid-flight, resetting...");
                     sendStatus();
-                    Thread.sleep(500);
+                    Thread.sleep(3000); // visible reset period
+                    returnToBase();
+                    resetToIdle();
                     continue;
                 }
 
+                // ===== FAULT ACTIVE =====
                 if (hardFaultActive) {
+                    // --- Transient faults: stuck / arrival sensor → reset and return to service ---
                     if ("droneStuckFault".equals(hardFaultState) || "arrivalSensorFault".equals(hardFaultState)) {
-                        // Keep stuck/arrival-sensor drones frozen; do not return to base.
+                        System.out.println(ts() + " [" + droneName + "] Transient fault (" + hardFaultState + "), resetting...");
                         sendStatus();
-                        Thread.sleep(500);
+                        Thread.sleep(3000); // visible reset period
+                        returnToBase();
+                        resetToIdle();
                         continue;
                     }
 
-                    if (nozzleRecoveryActive) {
-                        // Nozzle fault: return to base with normal travel timing (no teleport), then auto-repair.
-                        float returnTime = 0;
-                        if (currentZoneId > 0) {
-                            try {
-                                Zone currentZoneV = Zone.getZoneFromId(zones, currentZoneId);
-                                returnTime = timeToOrigin(currentZoneV);
-                            } catch (Zone.UnknownZoneException ignored) { }
-                        }
-                        lastAnimDurationMs = (long)(returnTime * 60 * Scheduler.simulationSpeed);
-                        animStartTime = System.currentTimeMillis();
-                        targetZoneId = 0;
-                        hardFaultState = "returnOrigin";
-                        sendStatus();
-                        if (lastAnimDurationMs > 0) Thread.sleep(lastAnimDurationMs);
-
-                        currentZoneId = 0;
-                        targetZoneId = -1;
-                        setDroneFull();
-                        nozzleRecoveryActive = false;
-                        hardFaultActive = false;
-                        hardFaultState = "idle";
-                        if (stateMachine.getState() == DroneState.returnOrigin) {
-                            stateMachine.handleEvent(DroneEvent.arrivedToOrigin);
-                        }
-                        System.out.println(ts() + " [" + droneName + "] Nozzle fault repaired at base");
-                        sendStatus();
-                        continue;
-                    }
-
-                    // Return to base after fault
-                    System.out.println(ts() + " [" + droneName + "] Returning to base after fault");
+                    // --- Hard fault: nozzle / comm failure → return to base, permanently offline ---
+                    System.out.println(ts() + " [" + droneName + "] Hard fault (" + hardFaultState + "), returning to base...");
                     float returnTime = 0;
                     if (currentZoneId > 0) {
                         try {
@@ -270,20 +275,7 @@ public class Drone implements Runnable {
                     currentZoneId = 0;
                     targetZoneId = -1;
                     sendStatus();
-                    if ("nozzleStuckFault".equals(hardFaultState)) {
-                        // Nozzle faults are repairable at base.
-                        System.out.println(ts() + " [" + droneName + "] Nozzle fault repaired at base");
-                        hardFaultActive = false;
-                        hardFaultState = "idle";
-                        event = null;
-                        if (stateMachine.getState() == DroneState.returnOrigin) {
-                            stateMachine.handleEvent(DroneEvent.arrivedToOrigin);
-                        }
-                        sendStatus();
-                        continue;
-                    }
-
-                    System.out.println(ts() + " [" + droneName + "] Arrived at base, drone offline");
+                    System.out.println(ts() + " [" + droneName + "] Arrived at base, drone permanently offline (hard fault)");
                     running = false;
                     continue;
                 }
@@ -368,7 +360,7 @@ public class Drone implements Runnable {
                         boolean nozzleJamAtDrop = event.getFaultType() == Event.FaultType.NOZZLE_STUCK_OPEN || injectedNozzleJam;
 
                         if (nozzleJamAtDrop) {
-                            // Detect nozzle jam immediately on drop attempt at the fire zone.
+                            // Nozzle jam = hard fault. Report to scheduler then go offline.
                             Event nozzleReport = new Event(
                                     event.getTime(),
                                     event.getZoneID(),
@@ -379,19 +371,14 @@ public class Drone implements Runnable {
                             nozzleReport.setWaterLeft(event.getWaterLeft());
                             nozzleReport.deliverEvent(Event.State.PARTIAL_EXTINGUISHED);
                             try {
-                                // Water/fire level unchanged; scheduler will reassign this fire.
                                 droneSubsystem.reportPartialDone(nozzleReport, droneName);
                             } catch (Exception e) {
                                 e.printStackTrace();
                             }
 
-                            // Explicitly release local ownership so this drone cannot resume the same fire
-                            // after nozzle repair at base.
                             event = null;
                             hardFaultActive = true;
-                            nozzleRecoveryActive = true;
-                            hardFaultState = "returnOrigin";
-                            stateMachine.handleEvent(DroneEvent.jobFinished);
+                            hardFaultState = "nozzleStuckFault";
                             sendStatus();
                             break;
                         }
@@ -419,7 +406,6 @@ public class Drone implements Runnable {
                             } catch (Exception e) {
                                 e.printStackTrace();
                             }
-                            // Keep servicing ownership with this drone; refill then continue same event.
                             stateMachine.handleEvent(DroneEvent.needRefill);
                         }
                         sendStatus();
@@ -434,7 +420,6 @@ public class Drone implements Runnable {
                         animStartTime = System.currentTimeMillis();
                         targetZoneId = 0;
                         System.out.println("[" + droneName + "] Travelling for " + travelTimeToRefill*60 + "s");
-                        // Publish the return leg before sleeping so GUI can animate to base.
                         sendStatus();
                         Thread.sleep(lastAnimDurationMs);
                         useUpBattery(travelTimeToRefill);
@@ -458,7 +443,6 @@ public class Drone implements Runnable {
                         animStartTime = System.currentTimeMillis();
                         targetZoneId = 0;
                         System.out.println("[" + droneName + "] Travelling for " + travelTimeToOrigin*60 + "s");
-                        // Publish the return leg before sleeping so GUI can animate to base.
                         sendStatus();
                         Thread.sleep(lastAnimDurationMs);
                         useUpBattery(travelTimeToOrigin);

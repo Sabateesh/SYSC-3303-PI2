@@ -10,7 +10,7 @@ public class Scheduler implements Runnable {
     private final List<Event> events = new LinkedList<>();
     private final Map<String, DroneStatus> droneStatuses = new HashMap<>();
     private final Set<String> failedDrones = new HashSet<>();
-    private final Set<String> nozzleFaultPendingRepair = new HashSet<>();
+    private final Set<String> transientFaultPendingRepair = new HashSet<>();
     private final Map<String, Set<String>> blockedEventKeysByDrone = new HashMap<>();
     private final Map<String, Event> activeAssignments = new HashMap<>();
     private final Map<String, Message> outboundMessages = new HashMap<>();
@@ -218,7 +218,7 @@ public class Scheduler implements Runnable {
                 }
                 DroneStatus ds = new DroneStatus(id, battery, zone, water, target, lastAnim, animStart, state, faultState);
                 updateDroneTimeBuckets(ds);
-                recoverNozzleFaultIfRepaired(ds);
+                recoverTransientFaultIfRepaired(ds);
                 droneStatuses.put(id, ds);
                 armExpectedArrivalIfMoving(ds);
                 clearExpectedArrivalIfReached(ds);
@@ -459,21 +459,16 @@ public class Scheduler implements Runnable {
             return;
         }
         failedDrones.add(droneId);
-        if ("nozzleStuckFault".equals(faultState)) {
-            nozzleFaultPendingRepair.add(droneId);
+        if ("droneStuckFault".equals(faultState) || "arrivalSensorFault".equals(faultState)) {
+            transientFaultPendingRepair.add(droneId);
         } else {
-            nozzleFaultPendingRepair.remove(droneId);
+            transientFaultPendingRepair.remove(droneId);
         }
         requestingDrones.removeIf(droneId::equals);
         expectedArrivals.remove(droneId);
 
         Event assigned = activeAssignments.remove(droneId);
         if (assigned != null && assigned.currentState() != Event.State.EXTINGUISHED) {
-            if ("nozzleStuckFault".equals(faultState)) {
-                blockedEventKeysByDrone
-                        .computeIfAbsent(droneId, k -> new HashSet<>())
-                        .add(eventKey(assigned));
-            }
             // Re-queue without the fault so the next drone handles it normally
             Event retry = new Event(assigned.getTime(), assigned.getZoneID(),
                     assigned.getEventType(), assigned.getSeverity(), Event.FaultType.NONE);
@@ -674,11 +669,11 @@ public class Scheduler implements Runnable {
         }
     }
 
-    private void recoverNozzleFaultIfRepaired(DroneStatus ds) {
+    private void recoverTransientFaultIfRepaired(DroneStatus ds) {
         if (ds == null || ds.id == null || ds.id.isEmpty()) {
             return;
         }
-        if (!failedDrones.contains(ds.id) || !nozzleFaultPendingRepair.contains(ds.id)) {
+        if (!failedDrones.contains(ds.id) || !transientFaultPendingRepair.contains(ds.id)) {
             return;
         }
         boolean repairedAtBase = ds.zoneId == 0 && "idle".equalsIgnoreCase(ds.state);
@@ -687,8 +682,8 @@ public class Scheduler implements Runnable {
         }
 
         failedDrones.remove(ds.id);
-        nozzleFaultPendingRepair.remove(ds.id);
-        System.out.println(ts() + " [Scheduler] Cleared nozzle fault for " + ds.id + " (repaired at base)");
+        transientFaultPendingRepair.remove(ds.id);
+        System.out.println(ts() + " [Scheduler] " + ds.id + " recovered from transient fault");
     }
 
     private void resetMetrics() {
