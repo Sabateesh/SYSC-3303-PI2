@@ -50,6 +50,7 @@ public class SchedulerGUI extends JFrame {
     private final ZonesPanel zonesPanel;
     //drone tracking on map
     private final Map<String,DroneMarker> droneMarkers;
+    private final Map<String, String> droneFaultStates;
     //summery labels
     private final JLabel activeFiresLabel;
     private final JLabel droneSummeryLabel;
@@ -81,6 +82,7 @@ public class SchedulerGUI extends JFrame {
         zoneFireStatus = new HashMap<>();
         zoneSeverity = new HashMap<>();
         droneMarkers = new HashMap<>();
+        droneFaultStates = new HashMap<>();
 
 
         //zones panel
@@ -259,6 +261,13 @@ public class SchedulerGUI extends JFrame {
         droneTableModel.setValueAt(dsg.getLabel(), r, 1);
         droneTableModel.setValueAt((int)(d.getWaterRemaining()*ReservoirRenderer.precision), r, 2);
 
+        DroneMarker previousMarker = droneMarkers.get(d.getDroneName());
+        boolean frozenFault = isFrozenFaultState(dsg);
+        boolean movingState = dsg == DroneStateGui.InRoute
+                || dsg == DroneStateGui.Returning
+                || dsg == DroneStateGui.Refilling
+                || dsg == DroneStateGui.DroppingAgent;
+
         // Show routing context in the Zone column
         String zoneDisplay;
         switch (d.getDroneState()) {
@@ -286,17 +295,22 @@ public class SchedulerGUI extends JFrame {
         droneTableModel.setValueAt(zoneDisplay, r, 3);
         droneTableModel.setValueAt(d.batteryPercent(), r, 4);
         String faultText;
-        switch (d.getDroneState()) {
-            case DroneState.faultStuck:
-            case DroneState.droneStuckFault:
-            case DroneState.arrivalSensorFault:
-            case DroneState.commFailure:
-                faultText = "STUCK"; break;
-            case DroneState.faultNozzle:
-            case DroneState.nozzleStuckFault:
-                faultText = "NOZZLE JAM"; break;
-            default:
-                faultText = "None"; break;
+        String explicitFault = droneFaultStates.get(d.getDroneName());
+        if ("nozzleStuckFault".equalsIgnoreCase(explicitFault)) {
+            faultText = "Nozzle Stuck";
+        } else {
+            switch (d.getDroneState()) {
+                case DroneState.faultStuck:
+                case DroneState.droneStuckFault:
+                case DroneState.arrivalSensorFault:
+                case DroneState.commFailure:
+                    faultText = "STUCK"; break;
+                case DroneState.faultNozzle:
+                case DroneState.nozzleStuckFault:
+                    faultText = "Nozzle Stuck"; break;
+                default:
+                    faultText = "None"; break;
+            }
         }
         droneTableModel.setValueAt(faultText, r, 5);
 
@@ -305,7 +319,16 @@ public class SchedulerGUI extends JFrame {
         final int baseSlotY = 500;  
         int fromPx = baseSlotX, fromPy = baseSlotY;
         int toPx   = baseSlotX, toPy   = baseSlotY;
-        if (d.getDroneState() == DroneState.enRoute) {
+        if (movingState && previousMarker != null) {
+            fromPx = previousMarker.currentPixelX();
+            fromPy = previousMarker.currentPixelY();
+        }
+        if (frozenFault && previousMarker != null) {
+            fromPx = previousMarker.currentPixelX();
+            fromPy = previousMarker.currentPixelY();
+            toPx = fromPx;
+            toPy = fromPy;
+        } else if (d.getDroneState() == DroneState.enRoute) {
             if (d.getCurrentZoneId() > 0) {
                 for (ZoneRect z : zones) {
                     if (z.id == d.getCurrentZoneId()) { fromPx = z.fireX(); fromPy = z.fireY(); break; }
@@ -344,6 +367,9 @@ public class SchedulerGUI extends JFrame {
 
 
         long animStart = d.getAnimStartTime();
+        if (frozenFault && previousMarker != null) {
+            animStart = previousMarker.animStartTime;
+        }
         droneMarkers.put(d.getDroneName(), new DroneMarker(
                 d.getDroneName(), d.getCurrentZoneId(), d.getTargetZoneId(), dsg,
                 fromPx, fromPy, toPx, toPy, animStart, d.getLastAnimDurationMs()));
@@ -374,8 +400,17 @@ public class SchedulerGUI extends JFrame {
     }
 
     public synchronized void paintAllDrones() {
+        sortDronesById();
         droneTableModel.setRowCount(drones.size());
+        Map<String, DroneMarker> preservedMarkers = new HashMap<>();
+        for (Map.Entry<String, DroneMarker> entry : droneMarkers.entrySet()) {
+            DroneMarker marker = entry.getValue();
+            if (marker != null && (marker.isFaulted() || marker.isMoving())) {
+                preservedMarkers.put(entry.getKey(), marker);
+            }
+        }
         droneMarkers.clear();
+        droneMarkers.putAll(preservedMarkers);
 
         for(int r=0; r<drones.size(); r++) {
             paintDrone(drones.get(r), r);
@@ -388,6 +423,7 @@ public class SchedulerGUI extends JFrame {
     //register a drone so it appears in the table
     public synchronized void registerDrone(Drone drone){
         if(!drones.contains(drone)) drones.add(drone);
+        sortDronesById();
         SwingUtilities.invokeLater(this::paintAllDrones);
     }
 
@@ -477,29 +513,113 @@ public class SchedulerGUI extends JFrame {
         long lastAnimDurationMs = ds.lastAnimDurationMs;
         long animStartTime = ds.animStartTime;
         String stateStr = ds.state;
+        String faultState = ds.faultState;
 
 
         // Find or create drone
-        Drone drone = null;
-        for (Drone d : drones) {
-            if (d.getDroneName().equals(droneId)) {
-                drone = d;
+        Drone updated = new Drone(droneId, this.zoneData, currentZoneId, waterRemaining, batteryRemaining, targetZoneId, lastAnimDurationMs, animStartTime, stateStr);
+        int existingIndex = -1;
+        for (int i = 0; i < drones.size(); i++) {
+            if (drones.get(i).getDroneName().equals(droneId)) {
+                existingIndex = i;
                 break;
             }
         }
-        if (drone == null) {
-            // Create a dummy drone for GUI
-            drone = new Drone(droneId, this.zoneData, currentZoneId, waterRemaining, batteryRemaining, targetZoneId, lastAnimDurationMs, animStartTime, stateStr);
-            registerDrone(drone);
+        if (existingIndex >= 0) {
+            drones.set(existingIndex, updated);
         } else {
-            // Update drone fields
-            // But Drone may not have setters, so perhaps call paintDrone with updated
-            // Since Drone is complex, perhaps re-register or something.
-            // For simplicity, assume drones are updated via state, but since no state, perhaps remove and add.
-            drones.remove(drone);
-            drone = new Drone(droneId, this.zoneData, currentZoneId, waterRemaining, batteryRemaining, targetZoneId, lastAnimDurationMs, animStartTime, stateStr);
-            registerDrone(drone);
+            drones.add(updated);
+            sortDronesById();
         }
+
+        if (faultState != null && !faultState.isEmpty()) {
+            droneFaultStates.put(droneId, faultState);
+        } else {
+            droneFaultStates.remove(droneId);
+        }
+
+        DroneStateGui stateGui = mapDroneState(updated.getDroneState());
+        if (isFrozenFaultState(stateGui)) {
+            freezeDroneMarker(droneId, updated, stateGui);
+        }
+        SwingUtilities.invokeLater(this::paintAllDrones);
+    }
+
+    private void sortDronesById() {
+        drones.sort((a, b) -> {
+            int ai = parseDroneIndex(a.getDroneName());
+            int bi = parseDroneIndex(b.getDroneName());
+            if (ai != bi) {
+                return Integer.compare(ai, bi);
+            }
+            return a.getDroneName().compareToIgnoreCase(b.getDroneName());
+        });
+    }
+
+    private int parseDroneIndex(String name) {
+        if (name == null) {
+            return Integer.MAX_VALUE;
+        }
+        int dash = name.lastIndexOf('-');
+        if (dash >= 0 && dash + 1 < name.length()) {
+            try {
+                return Integer.parseInt(name.substring(dash + 1));
+            } catch (NumberFormatException ignored) { }
+        }
+        String digits = name.replaceAll("[^0-9]", "");
+        if (!digits.isEmpty()) {
+            try {
+                return Integer.parseInt(digits);
+            } catch (NumberFormatException ignored) { }
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    private DroneStateGui mapDroneState(DroneState state) {
+        switch (state) {
+            case DroneState.enRoute: return DroneStateGui.InRoute;
+            case DroneState.droppingAgent: return DroneStateGui.DroppingAgent;
+            case DroneState.returnForRefill: return DroneStateGui.Refilling;
+            case DroneState.returnOrigin: return DroneStateGui.Returning;
+            case DroneState.commFailure: return DroneStateGui.CommFailure;
+            case DroneState.droneStuckFault: return DroneStateGui.DroneStuckFault;
+            case DroneState.arrivalSensorFault: return DroneStateGui.ArrivalSensorFault;
+            case DroneState.nozzleStuckFault: return DroneStateGui.NozzleStuckFault;
+            case DroneState.faultStuck: return DroneStateGui.FaultStuck;
+            case DroneState.faultNozzle: return DroneStateGui.FaultNozzle;
+            default: return DroneStateGui.IDLE;
+        }
+    }
+
+    private boolean isFrozenFaultState(DroneStateGui state) {
+        return state == DroneStateGui.DroneStuckFault
+                || state == DroneStateGui.ArrivalSensorFault
+                || state == DroneStateGui.FaultStuck
+                || state == DroneStateGui.CommFailure
+                || state == DroneStateGui.NozzleStuckFault
+                || state == DroneStateGui.FaultNozzle;
+    }
+
+    private void freezeDroneMarker(String droneId, Drone drone, DroneStateGui stateGui) {
+        DroneMarker previous = droneMarkers.get(droneId);
+        int fx, fy;
+        if (previous != null) {
+            fx = previous.currentPixelX();
+            fy = previous.currentPixelY();
+        } else {
+            final int baseSlotX = 20 + Math.max(0, drones.indexOf(drone)) * 20;
+            final int baseSlotY = 500;
+            fx = baseSlotX;
+            fy = baseSlotY;
+        }
+        droneMarkers.put(droneId, new DroneMarker(
+                droneId,
+                drone.getCurrentZoneId(),
+                drone.getTargetZoneId(),
+                stateGui,
+                fx, fy, fx, fy,
+                drone.getAnimStartTime(),
+                drone.getLastAnimDurationMs()));
     }
 
     //set bottom status bar
@@ -596,7 +716,16 @@ public class SchedulerGUI extends JFrame {
         final int toPixelX,   toPixelY;
         final long animStartTime;
         final long animDurationMs;
-        boolean isFaulted() { return state == DroneStateGui.FaultStuck || state == DroneStateGui.FaultNozzle; }
+        boolean isMoving() { return state == DroneStateGui.InRoute
+                || state == DroneStateGui.Returning
+                || state == DroneStateGui.Refilling
+                || state == DroneStateGui.DroppingAgent; }
+        boolean isFaulted() { return state == DroneStateGui.FaultStuck
+                || state == DroneStateGui.FaultNozzle
+                || state == DroneStateGui.DroneStuckFault
+                || state == DroneStateGui.ArrivalSensorFault
+                || state == DroneStateGui.CommFailure
+                || state == DroneStateGui.NozzleStuckFault; }
 
 
 
@@ -616,14 +745,8 @@ public class SchedulerGUI extends JFrame {
         }
 
         float animProgress() {
-            boolean moving = state == DroneStateGui.InRoute
-                    || state == DroneStateGui.Returning
-                    || state == DroneStateGui.Refilling;
-            if (state == DroneStateGui.FaultStuck) {
-                if (animDurationMs <= 0) return 0.5f;
-                float t = (System.currentTimeMillis() - animStartTime) / (float) animDurationMs;
-                return Math.min(1f, Math.max(0f, t));
-            }
+            if (isFaulted()) return 1f;
+            boolean moving = isMoving();
             if (!moving || animDurationMs <= 0) return 1f;
             float t = (System.currentTimeMillis() - animStartTime) / (float) animDurationMs;
             return Math.min(1f, Math.max(0f, t));
@@ -749,7 +872,10 @@ public class SchedulerGUI extends JFrame {
             for (DroneMarker dm : drones.values()) {
                 boolean enRoute  = dm.state == DroneStateGui.InRoute;
                 boolean returning = dm.state == DroneStateGui.Returning || dm.state == DroneStateGui.Refilling;
-                boolean stuck = dm.state == DroneStateGui.FaultStuck;
+                boolean stuck = dm.state == DroneStateGui.FaultStuck
+                        || dm.state == DroneStateGui.DroneStuckFault
+                        || dm.state == DroneStateGui.ArrivalSensorFault
+                        || dm.state == DroneStateGui.CommFailure;
                 if (!enRoute && !returning && !stuck) continue;
                 Color lineColor;
                 if (stuck) lineColor = new Color(220, 50, 50, 180);
@@ -1074,9 +1200,9 @@ public class SchedulerGUI extends JFrame {
                 if (fault.equals("STUCK")) {
                     c.setForeground(new Color(220, 120, 20)); c.setBackground(new Color(255, 245, 220));
                     setFont(getFont().deriveFont(Font.BOLD)); setText("\u26A0 STUCK");
-                } else if (fault.equals("NOZZLE JAM")) {
+                } else if (fault.equals("NOZZLE JAM") || fault.equals("Nozzle Stuck")) {
                     c.setForeground(new Color(180, 20, 20)); c.setBackground(new Color(255, 220, 220));
-                    setFont(getFont().deriveFont(Font.BOLD)); setText("\u2716 NOZZLE JAM");
+                    setFont(getFont().deriveFont(Font.BOLD)); setText("\u2716 Nozzle Stuck");
                 } else {
                     c.setForeground(new Color(100, 160, 100)); c.setBackground(Color.WHITE);
                     setFont(getFont().deriveFont(Font.PLAIN)); setText("\u2714 None");
@@ -1087,6 +1213,8 @@ public class SchedulerGUI extends JFrame {
     }
 
 }
+
+
 
 
 

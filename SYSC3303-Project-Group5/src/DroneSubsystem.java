@@ -14,6 +14,8 @@ public class DroneSubsystem implements Runnable {
     private final Map<String, Integer> resendCounts = new HashMap<>();
     private final Map<String, PendingResend> pendingResends = new HashMap<>();
     private final Set<String> communicationFailedDrones = new HashSet<>();
+    private final Set<String> stuckFaultDrones = new HashSet<>();
+    private final Set<String> nozzleJamArmedDrones = new HashSet<>();
     private final Map<String, Integer> outboundCorruptionBudget = new HashMap<>();
     private long lastReceivedSequenceFromScheduler = -1;
     private static final long MAX_SEQUENCE_GAP = 5;
@@ -114,9 +116,6 @@ public class DroneSubsystem implements Runnable {
     }
 
     public void sendStatus(String droneId, float battery, int zoneId, float water, int targetZoneId, long lastAnimDurationMs, long animStartTime, String state) throws Exception {
-        if (isCommunicationFailed(droneId)) {
-            state = "commFailure";
-        }
         String note = droneId + "," + battery + "," + zoneId + "," + water + "," + targetZoneId + "," + lastAnimDurationMs + "," + animStartTime + "," + state;
         sendMessage(new Message(Message.Type.DRONE_STATUS, null, note));
     }
@@ -128,6 +127,18 @@ public class DroneSubsystem implements Runnable {
     public boolean isCommunicationFailed(String droneId) {
         synchronized (taskLock) {
             return communicationFailedDrones.contains(droneId);
+        }
+    }
+
+    public boolean isStuckFault(String droneId) {
+        synchronized (taskLock) {
+            return stuckFaultDrones.contains(droneId);
+        }
+    }
+
+    public boolean consumeNozzleJamFault(String droneId) {
+        synchronized (taskLock) {
+            return nozzleJamArmedDrones.remove(droneId);
         }
     }
 
@@ -311,7 +322,6 @@ public class DroneSubsystem implements Runnable {
         System.out.println(ts() + " [DroneSubsystem] Communication failed for " + droneId + " (" + reason + ")");
         try {
             sendMessage(Message.commFailure(droneId, reason));
-            sendStatus(droneId, Drone.BATTERY_SIZE, 0, Drone.TANK_SIZE, 0, 0, 0, "commFailure");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -375,6 +385,18 @@ public class DroneSubsystem implements Runnable {
                             outboundCorruptionBudget.put(targetDrone, INJECTED_CORRUPT_PACKETS);
                             System.out.println(ts() + " [DroneSubsystem] Armed comm corruption for " + targetDrone
                                     + " (next " + INJECTED_CORRUPT_PACKETS + " outbound packets)");
+                                    } else if ("STUCK".equalsIgnoreCase(faultCode)) {
+                                        synchronized (taskLock) {
+                                            stuckFaultDrones.add(targetDrone);
+                                            taskLock.notifyAll();
+                                        }
+                                        System.out.println(ts() + " [DroneSubsystem] Armed stuck fault for " + targetDrone);
+                        } else if ("NOZZLE".equalsIgnoreCase(faultCode)) {
+                            synchronized (taskLock) {
+                                nozzleJamArmedDrones.add(targetDrone);
+                            }
+                            System.out.println(ts() + " [DroneSubsystem] Armed nozzle jam for " + targetDrone
+                                    + " (will trigger on next drop attempt)");
                         } else {
                             String reason = "gui_injected_" + faultCode.toLowerCase();
                             markCommunicationFailed(targetDrone, reason);
