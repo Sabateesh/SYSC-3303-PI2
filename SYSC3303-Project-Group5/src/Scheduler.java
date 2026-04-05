@@ -9,9 +9,12 @@ public class Scheduler implements Runnable {
     private final List<Event> events = new LinkedList<>();
     private final Map<String, DroneStatus> droneStatuses = new HashMap<>();
     private final Set<String> failedDrones = new HashSet<>();
+    private final Set<String> nozzleFaultPendingRepair = new HashSet<>();
+    private final Map<String, Set<String>> blockedEventKeysByDrone = new HashMap<>();
     private final Map<String, Event> activeAssignments = new HashMap<>();
     private final Map<String, Message> outboundMessages = new HashMap<>();
     private final Map<String, PendingResend> pendingResends = new HashMap<>();
+    private final Map<String, ExpectedArrival> expectedArrivals = new HashMap<>();
     private final Set<String> processedDroneMessages = new HashSet<>();
     private SchedulerGUI gui;
     private final Queue<String> requestingDrones = new LinkedList<>();
@@ -19,9 +22,13 @@ public class Scheduler implements Runnable {
     private final List<Zone> zones;
 
     private static final long RESEND_TIMEOUT_MS = 2500;
+    // Extra grace so a normal dispatch/travel cycle does not get mistaken for a stuck drone,
+    // especially on the first fire where startup/UI/network jitter is highest.
+    private static final float ARRIVAL_TIMEOUT_FACTOR = 2.0f;
+    private static final long ARRIVAL_TIMEOUT_BUFFER_MS = 1000;
     private static final int MAX_RESEND_ATTEMPTS = 1;
     private static final long MAX_SEQUENCE_GAP = 5;
-    private long lastReceivedSequenceFromDroneSubsystem = -1;
+    private final Map<String, Long> lastReceivedSequenceFromDroneSubsystem = new HashMap<>();
     private long lastReceivedSequenceFromFireSubsystem = -1;
     private static final int SCHEDULER_PORT = 5000;
     private static final int FIRE_PORT = 5001;
@@ -76,6 +83,7 @@ public class Scheduler implements Runnable {
                     handleMessage(msg);
                 } catch (SocketTimeoutException e) {
                     checkResendTimeouts();
+                    checkArrivalTimeouts();
                 }
             }
         } catch (Exception e) {
@@ -126,15 +134,35 @@ public class Scheduler implements Runnable {
                 break;
             case DONE:
                 activeAssignments.remove(msg.getNote());
+                expectedArrivals.remove(msg.getNote());
                 sendMessage(new Message(Message.Type.ACK, null, "Done: " + msg.getEvent()), FIRE_PORT);
                 if (gui != null) gui.updateEvent(msg.getEvent());
                 assignTasks();
                 break;
             case PARTIAL_DONE:
-                activeAssignments.remove(msg.getNote());
-                events.add(msg.getEvent());
-                sendMessage(new Message(Message.Type.ACK, null, "Partial Done: " + msg.getEvent()), FIRE_PORT);
-                if (gui != null) gui.updateEvent(msg.getEvent());
+                Event assigned = activeAssignments.get(msg.getNote());
+                expectedArrivals.remove(msg.getNote());
+                Event reported = msg.getEvent();
+                DroneStatus reporterStatus = droneStatuses.get(msg.getNote());
+                boolean nozzleFaultEvent = reported != null
+                        && reported.getFaultType() == Event.FaultType.NOZZLE_STUCK_OPEN;
+                boolean atDropContext = reporterStatus != null
+                        && "droppingAgent".equalsIgnoreCase(reporterStatus.state);
+                boolean noWaterDropped = assigned != null
+                        && reported != null
+                        && Math.abs(assigned.getWaterLeft() - reported.getWaterLeft()) < 0.0001f;
+                if (nozzleFaultEvent && atDropContext && noWaterDropped) {
+                    // Drone attempted a drop but fire water requirement did not change => nozzle jam fault.
+                    markDroneFault(msg.getNote(), "nozzleStuckFault", "nozzle_jam_detected");
+                    sendMessage(new Message(Message.Type.ACK, null, "Partial Done: nozzle jam"), FIRE_PORT);
+                } else {
+                    // Keep ownership with the same drone; do not enqueue for others unless a fault occurs.
+                    if (reported != null) {
+                        activeAssignments.put(msg.getNote(), reported);
+                    }
+                    sendMessage(new Message(Message.Type.ACK, null, "Partial Done: " + reported), FIRE_PORT);
+                    if (gui != null) gui.updateEvent(reported);
+                }
                 assignTasks();
                 break;
             case DRONE_STATUS:
@@ -146,9 +174,19 @@ public class Scheduler implements Runnable {
                 int target = parseInt(parts, 4, 0);
                 long lastAnim = parseLong(parts, 5, 0);
                 long animStart = parseLong(parts, 6, 0);
-                String state = parts.length > 7 ? parts[7] : "idle";
-                DroneStatus ds = new DroneStatus(id, battery, zone, water, target, lastAnim, animStart, state);
+                String rawState = parts.length > 7 ? parts[7] : "idle";
+                String state = rawState;
+                String faultState = "";
+                if (rawState.contains("|")) {
+                    String[] stateParts = rawState.split("\\|", 2);
+                    state = stateParts[0];
+                    faultState = stateParts.length > 1 ? stateParts[1] : "";
+                }
+                DroneStatus ds = new DroneStatus(id, battery, zone, water, target, lastAnim, animStart, state, faultState);
+                recoverNozzleFaultIfRepaired(ds);
                 droneStatuses.put(id, ds);
+                armExpectedArrivalIfMoving(ds);
+                clearExpectedArrivalIfReached(ds);
                 if (gui != null) gui.updateDrone(ds);
                 break;
             case RESEND_REQUEST:
@@ -187,6 +225,7 @@ public class Scheduler implements Runnable {
             activeAssignments.put(bestDrone, event);
             System.out.println(ts() + " [Scheduler] Dispatching " + bestDrone + " to zone " + event.getZoneID()
                     + " (tasks assigned: " + tasksAssigned.get(bestDrone) + ")");
+            trackExpectedArrival(bestDrone, event);
             sendMessage(new Message(Message.Type.DISPATCH, event, bestDrone), DRONE_PORT);
         }
 
@@ -201,8 +240,12 @@ public class Scheduler implements Runnable {
     private String selectBestDrone(Event event) {
         String best = null;
         float bestScore = Float.MAX_VALUE;
+        String eventKey = eventKey(event);
         for (String droneId : requestingDrones) {
             if (isDroneFailed(droneId)) {
+                continue;
+            }
+            if (blockedEventKeysByDrone.getOrDefault(droneId, Collections.emptySet()).contains(eventKey)) {
                 continue;
             }
             DroneStatus status = droneStatuses.get(droneId);
@@ -306,6 +349,28 @@ public class Scheduler implements Runnable {
         }
     }
 
+    private void checkArrivalTimeouts() {
+        long now = System.currentTimeMillis();
+        Iterator<Map.Entry<String, ExpectedArrival>> it = expectedArrivals.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, ExpectedArrival> entry = it.next();
+            String droneId = entry.getKey();
+            ExpectedArrival expected = entry.getValue();
+            if (!expected.armed) {
+                continue;
+            }
+            DroneStatus current = droneStatuses.get(droneId);
+            if (current != null && current.zoneId == expected.zoneId) {
+                it.remove();
+                continue;
+            }
+            if (now > expected.deadlineMs) {
+                it.remove();
+                markDroneFault(droneId, "droneStuckFault", "arrival_timeout");
+            }
+        }
+    }
+
     private void markDroneCommunicationFailed(String droneId, String reason) {
         markDroneFault(droneId, "commFailure", reason);
     }
@@ -313,17 +378,8 @@ public class Scheduler implements Runnable {
     private void handleDroneFailureMessage(Message msg) {
         String droneId = extractDroneId(msg);
         String reason = extractFailureReason(msg.getNote());
-
-        String faultState = "commFailure";
-        if (reason.startsWith("fault_drone_stuck")) {
-            faultState = "droneStuckFault";
-        } else if (reason.startsWith("fault_arrival_sensor")) {
-            faultState = "arrivalSensorFault";
-        } else if (reason.startsWith("fault_nozzle_stuck")) {
-            faultState = "nozzleStuckFault";
-        }
-
-        markDroneFault(droneId, faultState, reason.isEmpty() ? "peer_reported" : reason);
+        // Drones should not explicitly classify motion/nozzle faults; only comm failures are accepted here.
+        markDroneCommunicationFailed(droneId, reason.isEmpty() ? "peer_reported" : reason);
     }
 
     private String extractFailureReason(String note) {
@@ -339,15 +395,30 @@ public class Scheduler implements Runnable {
             return;
         }
         failedDrones.add(droneId);
+        if ("nozzleStuckFault".equals(faultState)) {
+            nozzleFaultPendingRepair.add(droneId);
+        } else {
+            nozzleFaultPendingRepair.remove(droneId);
+        }
         requestingDrones.removeIf(droneId::equals);
+        expectedArrivals.remove(droneId);
 
         Event assigned = activeAssignments.remove(droneId);
         if (assigned != null && assigned.currentState() != Event.State.EXTINGUISHED) {
+            if ("nozzleStuckFault".equals(faultState)) {
+                blockedEventKeysByDrone
+                        .computeIfAbsent(droneId, k -> new HashSet<>())
+                        .add(eventKey(assigned));
+            }
             // Re-queue without the fault so the next drone handles it normally
             Event retry = new Event(assigned.getTime(), assigned.getZoneID(),
                     assigned.getEventType(), assigned.getSeverity(), Event.FaultType.NONE);
             retry.setWaterLeft(assigned.getWaterLeft());
+            retry.deliverEvent(Event.State.PENDING);
             events.add(0, retry);
+            if (gui != null) {
+                gui.updateEvent(retry);
+            }
         }
 
         DroneStatus prev = droneStatuses.get(droneId);
@@ -358,6 +429,7 @@ public class Scheduler implements Runnable {
                 prev == null ? 0 : prev.targetZoneId,
                 prev == null ? 0 : prev.lastAnimDurationMs,
                 prev == null ? 0 : prev.animStartTime,
+                faultState,
                 faultState);
         droneStatuses.put(droneId, failedStatus);
         if (gui != null) {
@@ -378,29 +450,35 @@ public class Scheduler implements Runnable {
     private void detectSequenceGapsFromDrone(Message msg, String sourceDroneId) {
         Message.Type type = msg.getType();
         long inboundSeq = msg.getSequenceNumber();
+        String sequenceKey = sequenceTrackingKey(msg, sourceDroneId);
 
         // Track one sequence stream for all messages coming from DroneSubsystem process.
-        // Fault only on task-control packets; status/failure chatter still advances baseline.
+        // Track per-drone sequence streams so one drone's packet gap cannot fault another drone.
         if (type == Message.Type.REQUEST_TASK
                 || type == Message.Type.DONE
                 || type == Message.Type.PARTIAL_DONE
                 || type == Message.Type.DRONE_STATUS
                 || type == Message.Type.COMM_FAILURE
                 || type == Message.Type.RESEND_REQUEST) {
-            if (lastReceivedSequenceFromDroneSubsystem >= 0) {
-                if (inboundSeq <= lastReceivedSequenceFromDroneSubsystem) {
+            if (sequenceKey == null || sequenceKey.isEmpty()) {
+                return;
+            }
+
+            Long lastSeq = lastReceivedSequenceFromDroneSubsystem.get(sequenceKey);
+            if (lastSeq != null) {
+                if (inboundSeq <= lastSeq) {
                     // UDP can reorder/duplicate packets; ignore non-forward movement.
                     return;
                 }
 
-                long gap = inboundSeq - lastReceivedSequenceFromDroneSubsystem;
+                long gap = inboundSeq - lastSeq;
                 // REQUEST_TASK is frequent and non-critical; dropped task requests are retried naturally.
                 // Only fault on completion-critical control messages.
                 boolean taskControlType = type == Message.Type.DONE
                         || type == Message.Type.PARTIAL_DONE;
 
                 // Always advance baseline once we've observed forward progress.
-                lastReceivedSequenceFromDroneSubsystem = inboundSeq;
+                lastReceivedSequenceFromDroneSubsystem.put(sequenceKey, inboundSeq);
 
                 if (taskControlType && gap > 1 && gap <= MAX_SEQUENCE_GAP) {
                     if (sourceDroneId != null && !sourceDroneId.isEmpty()) {
@@ -414,7 +492,7 @@ public class Scheduler implements Runnable {
                 return;
             }
 
-            lastReceivedSequenceFromDroneSubsystem = inboundSeq;
+            lastReceivedSequenceFromDroneSubsystem.put(sequenceKey, inboundSeq);
             return;
         }
 
@@ -462,6 +540,16 @@ public class Scheduler implements Runnable {
         }
     }
 
+    private String sequenceTrackingKey(Message msg, String sourceDroneId) {
+        if (sourceDroneId != null && !sourceDroneId.isEmpty()) {
+            return sourceDroneId;
+        }
+        if (msg.getType() == Message.Type.DRONE_STATUS || msg.getType() == Message.Type.COMM_FAILURE) {
+            return extractDroneId(msg);
+        }
+        return sourceDroneId;
+    }
+
     private float parseFloat(String[] parts, int idx, float defaultValue) {
         if (idx >= parts.length) return defaultValue;
         try { return Float.parseFloat(parts[idx]); } catch (Exception e) { return defaultValue; }
@@ -477,6 +565,75 @@ public class Scheduler implements Runnable {
         try { return Long.parseLong(parts[idx]); } catch (Exception e) { return defaultValue; }
     }
 
+    private void trackExpectedArrival(String droneId, Event event) {
+        expectedArrivals.put(droneId, new ExpectedArrival(event.getZoneID()));
+    }
+
+    private void armExpectedArrivalIfMoving(DroneStatus status) {
+        ExpectedArrival expected = expectedArrivals.get(status.id);
+        if (expected == null || expected.armed) {
+            return;
+        }
+        boolean headingToExpectedZone = status.targetZoneId == expected.zoneId;
+        boolean movingToFire = "enRoute".equalsIgnoreCase(status.state) || "enroute".equalsIgnoreCase(status.state);
+        if (!headingToExpectedZone || !movingToFire) {
+            return;
+        }
+
+        long observedTravelMs = status.lastAnimDurationMs > 0 ? status.lastAnimDurationMs : estimateTravelToZoneMs(status.id, expected.zoneId);
+        long timeoutMs = (long) (observedTravelMs * ARRIVAL_TIMEOUT_FACTOR) + ARRIVAL_TIMEOUT_BUFFER_MS;
+        expected.deadlineMs = status.animStartTime + Math.max(1, timeoutMs);
+        expected.armed = true;
+    }
+
+    private long estimateTravelToZoneMs(String droneId, int zoneId) {
+        try {
+            Zone origin = new Zone(0, 0, 0, 0, 0);
+            DroneStatus status = droneStatuses.get(droneId);
+            Zone from = origin;
+            if (status != null && status.zoneId > 0) {
+                from = Zone.getZoneFromId(zones, status.zoneId);
+            }
+            Zone to = Zone.getZoneFromId(zones, zoneId);
+            float distance = Zone.getDistance(from, to);
+            float travelMinutes = distance / Drone.DRONE_SPEED;
+            return (long) (travelMinutes * 60 * simulationSpeed);
+        } catch (Exception ignored) {
+            return 1000;
+        }
+    }
+
+    private void clearExpectedArrivalIfReached(DroneStatus status) {
+        ExpectedArrival expected = expectedArrivals.get(status.id);
+        if (expected != null && status.zoneId == expected.zoneId) {
+            expectedArrivals.remove(status.id);
+        }
+    }
+
+    private void recoverNozzleFaultIfRepaired(DroneStatus ds) {
+        if (ds == null || ds.id == null || ds.id.isEmpty()) {
+            return;
+        }
+        if (!failedDrones.contains(ds.id) || !nozzleFaultPendingRepair.contains(ds.id)) {
+            return;
+        }
+        boolean repairedAtBase = ds.zoneId == 0 && "idle".equalsIgnoreCase(ds.state);
+        if (!repairedAtBase) {
+            return;
+        }
+
+        failedDrones.remove(ds.id);
+        nozzleFaultPendingRepair.remove(ds.id);
+        System.out.println(ts() + " [Scheduler] Cleared nozzle fault for " + ds.id + " (repaired at base)");
+    }
+
+    private String eventKey(Event event) {
+        if (event == null) {
+            return "";
+        }
+        return event.getTime() + "#" + event.getZoneID();
+    }
+
     private static class PendingResend {
         final String expectedMessageId;
         final long requestedAtMs;
@@ -484,6 +641,18 @@ public class Scheduler implements Runnable {
         PendingResend(String expectedMessageId, long requestedAtMs) {
             this.expectedMessageId = expectedMessageId;
             this.requestedAtMs = requestedAtMs;
+        }
+    }
+
+    private static class ExpectedArrival {
+        final int zoneId;
+        long deadlineMs;
+        boolean armed;
+
+        ExpectedArrival(int zoneId) {
+            this.zoneId = zoneId;
+            this.deadlineMs = Long.MAX_VALUE;
+            this.armed = false;
         }
     }
 
@@ -501,7 +670,18 @@ public class Scheduler implements Runnable {
         long lastAnimDurationMs;
         long animStartTime;
         String state;
-        DroneStatus(String i, float b, int z, float w, int t, long la, long as, String s) { id = i; battery = b; zoneId = z; water = w; targetZoneId = t; lastAnimDurationMs = la; animStartTime = as; state = s; }
+        String faultState;
+        DroneStatus(String i, float b, int z, float w, int t, long la, long as, String s, String fs) {
+            id = i;
+            battery = b;
+            zoneId = z;
+            water = w;
+            targetZoneId = t;
+            lastAnimDurationMs = la;
+            animStartTime = as;
+            state = s;
+            faultState = fs == null ? "" : fs;
+        }
     }
 
     public static void main(String[] args) throws Exception {
