@@ -56,6 +56,7 @@ public class SchedulerGUI extends JFrame {
     private final JLabel droneSummeryLabel;
     private final JLabel statusLabel;
     private final JLabel faultSummaryLabel;
+    private Boolean lastSimulationStatus = null;
     private JComboBox<String> faultDroneSelector;
     private JComboBox<String> faultTypeSelector;
 
@@ -624,6 +625,10 @@ public class SchedulerGUI extends JFrame {
 
     //set bottom status bar
     public void setStatus(boolean status){
+        if (lastSimulationStatus != null && lastSimulationStatus == status) {
+            return;
+        }
+        lastSimulationStatus = status;
         String text = status ? "▶ Simulation started" : "■ Simulation complete";
         logEvent(status ? "Simulation STARTED" : "Simulation COMPLETE");
         SwingUtilities.invokeLater(()-> {

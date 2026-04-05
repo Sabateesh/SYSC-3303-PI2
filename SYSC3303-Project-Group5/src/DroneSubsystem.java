@@ -17,6 +17,7 @@ public class DroneSubsystem implements Runnable {
     private final Set<String> stuckFaultDrones = new HashSet<>();
     private final Set<String> nozzleJamArmedDrones = new HashSet<>();
     private final Map<String, Integer> outboundCorruptionBudget = new HashMap<>();
+    private volatile boolean simulationEnded = false;
     private long lastReceivedSequenceFromScheduler = -1;
     private static final long MAX_SEQUENCE_GAP = 5;
     private static final long RESEND_TIMEOUT_MS = 2500;
@@ -86,6 +87,9 @@ public class DroneSubsystem implements Runnable {
     }
 
     public Event requestTask(String droneId) throws InterruptedException {
+        if (simulationEnded) {
+            return null;
+        }
         if (isCommunicationFailed(droneId)) {
             Thread.sleep(300);
             return null;
@@ -97,7 +101,7 @@ public class DroneSubsystem implements Runnable {
         }
         synchronized (taskLock) {
             Queue<Event> queue = taskQueues.computeIfAbsent(droneId, k -> new LinkedList<>());
-            while (queue.isEmpty() && !isCommunicationFailed(droneId)) {
+            while (queue.isEmpty() && !isCommunicationFailed(droneId) && !simulationEnded) {
                 taskLock.wait(1000);
                 if (queue.isEmpty()) {
                     return null;
@@ -105,6 +109,10 @@ public class DroneSubsystem implements Runnable {
             }
             return queue.poll();
         }
+    }
+
+    public boolean isSimulationEnded() {
+        return simulationEnded;
     }
 
     public void reportDone(Event event, String droneId) throws Exception {
@@ -340,6 +348,26 @@ public class DroneSubsystem implements Runnable {
         }
     }
 
+    private void stopAllDroneThreads() {
+        for (Thread droneThread : droneThreads) {
+            if (droneThread != null && droneThread.isAlive()) {
+                droneThread.interrupt();
+            }
+        }
+
+        for (Thread droneThread : droneThreads) {
+            if (droneThread == null) {
+                continue;
+            }
+            try {
+                droneThread.join(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+    }
+
     @Override
     public void run() {
         System.out.println("[DroneSubsystem] Running on port " + DRONE_PORT);
@@ -401,6 +429,14 @@ public class DroneSubsystem implements Runnable {
                             String reason = "gui_injected_" + faultCode.toLowerCase();
                             markCommunicationFailed(targetDrone, reason);
                         }
+                    } else if (msg.getType() == Message.Type.END_SIMULATION) {
+                        simulationEnded = true;
+                        synchronized (taskLock) {
+                            taskLock.notifyAll();
+                        }
+                        stopAllDroneThreads();
+                        System.out.println(ts() + " [DroneSubsystem] Received simulation end signal from scheduler");
+                        break;
                     }
                 } catch (SocketTimeoutException e) {
                     checkResendTimeouts();

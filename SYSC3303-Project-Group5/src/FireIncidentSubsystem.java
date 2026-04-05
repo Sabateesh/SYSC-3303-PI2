@@ -7,6 +7,7 @@ public class FireIncidentSubsystem implements Runnable {
     private final List<Event> events;
     private final String eventpath;
     private final String threadName;
+    private volatile boolean simulationEnded = false;
 
     private static final int SCHEDULER_PORT = 5000;
     private static final int FIRE_PORT = 5001;
@@ -154,10 +155,23 @@ public class FireIncidentSubsystem implements Runnable {
             try {
                 sendMessage(new Message(Message.Type.EVENT, event, ""));
                 Message ack = receiveMessage();
+                if (ack.getType() == Message.Type.END_SIMULATION) {
+                    System.out.println("[FireIncidentSubsystem] Stop signal received from scheduler");
+                    simulationEnded = true;
+                    break;
+                }
                 while (ack.getType() == Message.Type.ACK
                         && (ack.getNote().startsWith("Done") || ack.getNote().startsWith("Partial"))) {
                     System.out.println("[FireIncidentSubsystem] Completion received early: " + ack);
                     ack = receiveMessage();
+                    if (ack.getType() == Message.Type.END_SIMULATION) {
+                        System.out.println("[FireIncidentSubsystem] Stop signal received from scheduler");
+                        simulationEnded = true;
+                        break;
+                    }
+                }
+                if (simulationEnded) {
+                    break;
                 }
                 System.out.println("[FireIncidentSubsystem] ACK received: " + ack);
             } catch (Exception e) {
@@ -174,6 +188,10 @@ public class FireIncidentSubsystem implements Runnable {
         for (int i = 0; i < events.size(); i++) {
             try {
                 Message confirmation = receiveMessage();
+                if (confirmation.getType() == Message.Type.END_SIMULATION) {
+                    System.out.println("[FireIncidentSubsystem] Stop signal received from scheduler");
+                    break;
+                }
                 System.out.println("[FireIncidentSubsystem] Confirmation received: " + confirmation);
             } catch (Exception e) {
                 e.printStackTrace();
