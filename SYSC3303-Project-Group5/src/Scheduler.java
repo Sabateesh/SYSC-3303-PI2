@@ -1,6 +1,7 @@
 import java.net.*;
 import java.io.*;
 import java.util.*;
+import java.nio.file.*;
 
 public class Scheduler implements Runnable {
     private DatagramSocket socket;
@@ -37,6 +38,32 @@ public class Scheduler implements Runnable {
 
     private boolean simulationStarted = false;
     private boolean endReceived = false;
+    private boolean completionNotified = false;
+
+    // Simulation instrumentation
+    private boolean metricsFinalized = false;
+    private long simulationStartMs = -1;
+    private long simulationEndMs = -1;
+    private long firstIncidentDetectedMs = -1;
+    private long lastIncidentExtinguishedMs = -1;
+    private String metricsReportPath = "";
+
+    private final Map<String, Long> incidentDetectedMs = new HashMap<>();
+    private final Map<String, Long> incidentFirstDispatchMs = new HashMap<>();
+    private final Map<String, Long> incidentExtinguishedMs = new HashMap<>();
+    private final Map<String, Long> incidentLatencyMs = new HashMap<>();
+    private final Map<String, Float> incidentDispatchDistance = new HashMap<>();
+    private final Map<String, String> incidentDetectedSimTime = new HashMap<>();
+    private final Map<String, String> incidentExtinguishedSimTime = new HashMap<>();
+
+    private final Map<String, String> lastDroneState = new HashMap<>();
+    private final Map<String, Long> lastDroneStateTimestamp = new HashMap<>();
+    private final Map<String, Long> droneIdleMs = new HashMap<>();
+    private final Map<String, Long> droneFlightMs = new HashMap<>();
+    private final Map<String, Float> droneDispatchDistance = new HashMap<>();
+    private final Map<String, Integer> droneFiresExtinguished = new HashMap<>();
+    private final Map<String, Float> droneWaterDropped = new HashMap<>();
+    private float totalDispatchDistance = 0f;
 
     private static String ts() {
         return "[" + java.time.LocalDateTime.now()
@@ -121,6 +148,7 @@ public class Scheduler implements Runnable {
             case EVENT:
                 System.out.println(ts() + " [Scheduler] Fire event received: zone=" + msg.getEvent().getZoneID() + " severity=" + msg.getEvent().getSeverity());
                 events.add(msg.getEvent());
+                recordIncidentDetected(msg.getEvent());
                 sendMessage(new Message(Message.Type.ACK, null, "Event received"), FIRE_PORT);
                 if (gui != null) gui.addEvent(msg.getEvent());
                 assignTasks();
@@ -133,8 +161,13 @@ public class Scheduler implements Runnable {
                 assignTasks();
                 break;
             case DONE:
-                activeAssignments.remove(msg.getNote());
+                Event completedAssigned = activeAssignments.remove(msg.getNote());
                 expectedArrivals.remove(msg.getNote());
+                if (completedAssigned != null && msg.getEvent() != null) {
+                    recordDroneWaterDrop(msg.getNote(), completedAssigned, msg.getEvent());
+                }
+                recordDroneFireExtinguished(msg.getNote(), msg.getEvent());
+                recordIncidentExtinguished(msg.getEvent());
                 sendMessage(new Message(Message.Type.ACK, null, "Done: " + msg.getEvent()), FIRE_PORT);
                 if (gui != null) gui.updateEvent(msg.getEvent());
                 assignTasks();
@@ -159,6 +192,7 @@ public class Scheduler implements Runnable {
                     // Keep ownership with the same drone; do not enqueue for others unless a fault occurs.
                     if (reported != null) {
                         activeAssignments.put(msg.getNote(), reported);
+                        recordDroneWaterDrop(msg.getNote(), assigned, reported);
                     }
                     sendMessage(new Message(Message.Type.ACK, null, "Partial Done: " + reported), FIRE_PORT);
                     if (gui != null) gui.updateEvent(reported);
@@ -183,6 +217,7 @@ public class Scheduler implements Runnable {
                     faultState = stateParts.length > 1 ? stateParts[1] : "";
                 }
                 DroneStatus ds = new DroneStatus(id, battery, zone, water, target, lastAnim, animStart, state, faultState);
+                updateDroneTimeBuckets(ds);
                 recoverNozzleFaultIfRepaired(ds);
                 droneStatuses.put(id, ds);
                 armExpectedArrivalIfMoving(ds);
@@ -197,6 +232,9 @@ public class Scheduler implements Runnable {
                 break;
             case START:
                 simulationStarted = true;
+                completionNotified = false;
+                resetMetrics();
+                simulationStartMs = System.currentTimeMillis();
                 if (gui != null) gui.setStatus(true);
                 System.out.println("STARTED !!!!!");
                 break;
@@ -206,10 +244,35 @@ public class Scheduler implements Runnable {
             default:
                 System.out.println("[Scheduler] Unknown message type: " + msg.getType());
         }
-        if (simulationStarted && events.isEmpty() && allDronesAtBase() && endReceived) {
+        if (!completionNotified && canMarkSimulationComplete()) {
+            completionNotified = true;
+            // Tell both subsystems that simulation is over so they stop cleanly.
+            sendMessage(new Message(Message.Type.END_SIMULATION, null, "scheduler_complete"), FIRE_PORT);
+            sendMessage(new Message(Message.Type.END_SIMULATION, null, "scheduler_complete"), DRONE_PORT);
+            finalizeAndPublishMetrics();
             if (gui != null) gui.setStatus(false);
             System.out.println("STOPPED !!!!!");
         }
+    }
+
+    private boolean canMarkSimulationComplete() {
+        if (!simulationStarted || !endReceived) {
+            return false;
+        }
+        if (!events.isEmpty()) {
+            return false;
+        }
+        if (!activeAssignments.isEmpty()) {
+            return false;
+        }
+        if (!allDronesAtBase()) {
+            return false;
+        }
+        // Do not complete while any detected incident is not yet fully extinguished.
+        if (!incidentDetectedMs.isEmpty() && incidentExtinguishedMs.size() < incidentDetectedMs.size()) {
+            return false;
+        }
+        return true;
     }
 
     private void assignTasks() throws Exception {
@@ -223,6 +286,7 @@ public class Scheduler implements Runnable {
             requestingDrones.remove(bestDrone);
             tasksAssigned.merge(bestDrone, 1, Integer::sum);
             activeAssignments.put(bestDrone, event);
+            recordDispatch(bestDrone, event);
             System.out.println(ts() + " [Scheduler] Dispatching " + bestDrone + " to zone " + event.getZoneID()
                     + " (tasks assigned: " + tasksAssigned.get(bestDrone) + ")");
             trackExpectedArrival(bestDrone, event);
@@ -625,6 +689,316 @@ public class Scheduler implements Runnable {
         failedDrones.remove(ds.id);
         nozzleFaultPendingRepair.remove(ds.id);
         System.out.println(ts() + " [Scheduler] Cleared nozzle fault for " + ds.id + " (repaired at base)");
+    }
+
+    private void resetMetrics() {
+        metricsFinalized = false;
+        simulationStartMs = -1;
+        simulationEndMs = -1;
+        firstIncidentDetectedMs = -1;
+        lastIncidentExtinguishedMs = -1;
+        metricsReportPath = "";
+
+        incidentDetectedMs.clear();
+        incidentFirstDispatchMs.clear();
+        incidentExtinguishedMs.clear();
+        incidentLatencyMs.clear();
+        incidentDispatchDistance.clear();
+        incidentDetectedSimTime.clear();
+        incidentExtinguishedSimTime.clear();
+
+        lastDroneState.clear();
+        lastDroneStateTimestamp.clear();
+        droneIdleMs.clear();
+        droneFlightMs.clear();
+        droneDispatchDistance.clear();
+        droneFiresExtinguished.clear();
+        droneWaterDropped.clear();
+        totalDispatchDistance = 0f;
+    }
+
+    private void updateDroneTimeBuckets(DroneStatus status) {
+        if (status == null || status.id == null || status.id.isEmpty()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long lastTs = lastDroneStateTimestamp.get(status.id);
+        String prev = lastDroneState.get(status.id);
+        if (lastTs != null && prev != null && now >= lastTs) {
+            long delta = now - lastTs;
+            if (isIdleState(prev)) {
+                droneIdleMs.merge(status.id, delta, Long::sum);
+            }
+            if (isFlightState(prev)) {
+                droneFlightMs.merge(status.id, delta, Long::sum);
+            }
+        }
+        lastDroneState.put(status.id, status.state);
+        lastDroneStateTimestamp.put(status.id, now);
+    }
+
+    private boolean isIdleState(String state) {
+        return "idle".equalsIgnoreCase(state);
+    }
+
+    private boolean isFlightState(String state) {
+        return "enRoute".equalsIgnoreCase(state)
+                || "enroute".equalsIgnoreCase(state)
+                || "returnOrigin".equalsIgnoreCase(state)
+                || "returnForRefill".equalsIgnoreCase(state);
+    }
+
+    private void recordIncidentDetected(Event event) {
+        if (event == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        String key = eventKey(event);
+        incidentDetectedMs.putIfAbsent(key, now);
+        incidentDetectedSimTime.putIfAbsent(key, event.getTime());
+        if (firstIncidentDetectedMs < 0 || now < firstIncidentDetectedMs) {
+            firstIncidentDetectedMs = now;
+        }
+    }
+
+    private void recordDroneWaterDrop(String droneId, Event before, Event after) {
+        if (droneId == null || before == null || after == null) {
+            return;
+        }
+        float dropped = Math.max(0f, before.getWaterLeft() - after.getWaterLeft());
+        droneWaterDropped.merge(droneId, dropped, Float::sum);
+    }
+
+    private void recordDroneFireExtinguished(String droneId, Event event) {
+        if (droneId == null || droneId.isEmpty() || event == null) {
+            return;
+        }
+        droneFiresExtinguished.merge(droneId, 1, Integer::sum);
+    }
+
+    private void recordDispatch(String droneId, Event event) {
+        if (droneId == null || event == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        String key = eventKey(event);
+        incidentFirstDispatchMs.putIfAbsent(key, now);
+
+        float distance = estimateDispatchDistance(droneId, event);
+        incidentDispatchDistance.merge(key, distance, Float::sum);
+        droneDispatchDistance.merge(droneId, distance, Float::sum);
+        totalDispatchDistance += distance;
+    }
+
+    private float estimateDispatchDistance(String droneId, Event event) {
+        try {
+            Zone from = new Zone(0, 0, 0, 0, 0);
+            DroneStatus status = droneStatuses.get(droneId);
+            if (status != null && status.zoneId > 0) {
+                from = Zone.getZoneFromId(zones, status.zoneId);
+            }
+            Zone to = Zone.getZoneFromId(zones, event.getZoneID());
+            return Zone.getDistance(from, to);
+        } catch (Exception ignored) {
+            return 0f;
+        }
+    }
+
+    private void recordIncidentExtinguished(Event event) {
+        if (event == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        String key = eventKey(event);
+        incidentExtinguishedMs.put(key, now);
+        incidentExtinguishedSimTime.put(key, event.getTime());
+        Long detected = incidentDetectedMs.get(key);
+        if (detected != null && now >= detected) {
+            incidentLatencyMs.put(key, now - detected);
+        }
+        if (lastIncidentExtinguishedMs < 0 || now > lastIncidentExtinguishedMs) {
+            lastIncidentExtinguishedMs = now;
+        }
+    }
+
+    private void finalizeAndPublishMetrics() {
+        if (metricsFinalized) {
+            return;
+        }
+        metricsFinalized = true;
+        simulationEndMs = System.currentTimeMillis();
+        finalizeOpenDroneStateDurations(simulationEndMs);
+
+        String reportBody = buildMetricsReport();
+        writeMetricsReport(reportBody);
+        publishMetricsSummaryToGui();
+    }
+
+    private void finalizeOpenDroneStateDurations(long now) {
+        for (String droneId : new HashSet<>(lastDroneState.keySet())) {
+            Long lastTs = lastDroneStateTimestamp.get(droneId);
+            String state = lastDroneState.get(droneId);
+            if (lastTs == null || state == null || now < lastTs) {
+                continue;
+            }
+            long delta = now - lastTs;
+            if (isIdleState(state)) {
+                droneIdleMs.merge(droneId, delta, Long::sum);
+            }
+            if (isFlightState(state)) {
+                droneFlightMs.merge(droneId, delta, Long::sum);
+            }
+            lastDroneStateTimestamp.put(droneId, now);
+        }
+    }
+
+    private String buildMetricsReport() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Simulation Metrics Report\n");
+        sb.append("Generated: ").append(new Date()).append("\n\n");
+
+        long totalSimulationMs = (simulationStartMs >= 0 && simulationEndMs >= simulationStartMs)
+                ? (simulationEndMs - simulationStartMs) : -1;
+        long totalFireWindowMs = (firstIncidentDetectedMs >= 0 && lastIncidentExtinguishedMs >= firstIncidentDetectedMs)
+                ? (lastIncidentExtinguishedMs - firstIncidentDetectedMs) : -1;
+
+        sb.append("Overview\n");
+        sb.append("- Incidents detected: ").append(incidentDetectedMs.size()).append("\n");
+        sb.append("- Incidents extinguished: ").append(incidentExtinguishedMs.size()).append("\n");
+        sb.append("- First fire simulated timestamp: ").append(firstSimulatedTimestamp()).append("\n");
+        sb.append("- Last fire extinguished simulated timestamp: ").append(lastExtinguishedSimulatedTimestamp()).append("\n");
+        sb.append("- Total simulation time: ").append(formatDuration(totalSimulationMs)).append("\n");
+        sb.append("- Time from first incident to last extinguished: ").append(formatDuration(totalFireWindowMs)).append("\n");
+        sb.append("- Total dispatch distance: ").append(String.format(Locale.US, "%.2f", totalDispatchDistance)).append("\n\n");
+
+        sb.append("Incident Metrics\n");
+        List<String> incidentKeys = new ArrayList<>(incidentDetectedMs.keySet());
+        Collections.sort(incidentKeys);
+        for (String key : incidentKeys) {
+            long detect = incidentDetectedMs.getOrDefault(key, -1L);
+            long dispatch = incidentFirstDispatchMs.getOrDefault(key, -1L);
+            long extinguish = incidentExtinguishedMs.getOrDefault(key, -1L);
+            long latency = incidentLatencyMs.getOrDefault(key, -1L);
+            float dist = incidentDispatchDistance.getOrDefault(key, 0f);
+            sb.append("- ").append(key)
+                    .append(" | first response=").append(formatDuration(dispatch >= detect && detect >= 0 ? dispatch - detect : -1))
+                    .append(" | detect->extinguish=").append(formatDuration(latency))
+                    .append(" | dispatch distance=").append(String.format(Locale.US, "%.2f", dist))
+                    .append("\n");
+        }
+        sb.append("\n");
+
+        sb.append("Drone Metrics\n");
+        Set<String> droneIds = new TreeSet<>(droneStatuses.keySet());
+        for (String droneId : droneIds) {
+            long idle = droneIdleMs.getOrDefault(droneId, 0L);
+            long flight = droneFlightMs.getOrDefault(droneId, 0L);
+            float dist = droneDispatchDistance.getOrDefault(droneId, 0f);
+            int fires = droneFiresExtinguished.getOrDefault(droneId, 0);
+            float water = droneWaterDropped.getOrDefault(droneId, 0f);
+            sb.append("- ").append(droneId)
+                    .append(" | idle=").append(formatDuration(idle))
+                    .append(" | flight=").append(formatDuration(flight))
+                    .append(" | dispatch distance=").append(String.format(Locale.US, "%.2f", dist))
+                    .append(" | fires extinguished=").append(fires)
+                    .append(" | water dropped=").append(String.format(Locale.US, "%.2f", water))
+                    .append("\n");
+        }
+
+        return sb.toString();
+    }
+
+    private void writeMetricsReport(String body) {
+        try {
+            String fileName = "simulation_metrics_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + ".txt";
+            Path output = Paths.get("SYSC3303-Project-Group5", fileName);
+            Files.writeString(output, body, java.nio.charset.StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            metricsReportPath = output.toAbsolutePath().toString();
+            System.out.println(ts() + " [Scheduler] Metrics written to " + metricsReportPath);
+        } catch (Exception e) {
+            metricsReportPath = "write_failed";
+            System.out.println(ts() + " [Scheduler] Failed to write metrics report: " + e.getMessage());
+        }
+    }
+
+    private void publishMetricsSummaryToGui() {
+        if (gui == null) {
+            return;
+        }
+        long totalSimulationMs = (simulationStartMs >= 0 && simulationEndMs >= simulationStartMs)
+                ? (simulationEndMs - simulationStartMs) : -1;
+        long totalFireWindowMs = (firstIncidentDetectedMs >= 0 && lastIncidentExtinguishedMs >= firstIncidentDetectedMs)
+                ? (lastIncidentExtinguishedMs - firstIncidentDetectedMs) : -1;
+
+        long avgLatency = averageLong(incidentLatencyMs.values());
+        long avgIdle = averageLong(droneIdleMs.values());
+        long avgFlight = averageLong(droneFlightMs.values());
+
+        gui.logEvent("=== Simulation Metrics ===");
+        gui.logEvent("Incidents extinguished: " + incidentExtinguishedMs.size() + "/" + incidentDetectedMs.size());
+        gui.logEvent("Total simulation time: " + formatDuration(totalSimulationMs));
+        gui.logEvent("First incident -> last extinguished: " + formatDuration(totalFireWindowMs));
+        gui.logEvent("First fire simulated timestamp: " + firstSimulatedTimestamp());
+        gui.logEvent("Last fire extinguished simulated timestamp: " + lastExtinguishedSimulatedTimestamp());
+        gui.logEvent("Avg incident detect->extinguish: " + formatDuration(avgLatency));
+        gui.logEvent("Avg drone idle time: " + formatDuration(avgIdle));
+        gui.logEvent("Avg drone flight time: " + formatDuration(avgFlight));
+        gui.logEvent("Total dispatch distance: " + String.format(Locale.US, "%.2f", totalDispatchDistance));
+        for (String droneId : new TreeSet<>(droneStatuses.keySet())) {
+            gui.logEvent(droneId + " | fires extinguished: " + droneFiresExtinguished.getOrDefault(droneId, 0)
+                    + " | water dropped: " + String.format(Locale.US, "%.2f", droneWaterDropped.getOrDefault(droneId, 0f)));
+        }
+        if (!metricsReportPath.isEmpty()) {
+            gui.logEvent("Metrics saved: " + metricsReportPath);
+        }
+    }
+
+    private long averageLong(Collection<Long> values) {
+        if (values == null || values.isEmpty()) {
+            return 0;
+        }
+        long total = 0;
+        int count = 0;
+        for (Long value : values) {
+            if (value == null) {
+                continue;
+            }
+            total += value;
+            count++;
+        }
+        return count == 0 ? 0 : (total / count);
+    }
+
+    private String formatDuration(long millis) {
+        if (millis < 0) {
+            return "n/a";
+        }
+        long seconds = millis / 1000;
+        long ms = millis % 1000;
+        long minutes = seconds / 60;
+        long secPart = seconds % 60;
+        return String.format(Locale.US, "%dm %02ds %03dms", minutes, secPart, ms);
+    }
+
+    private String firstSimulatedTimestamp() {
+        if (incidentDetectedSimTime.isEmpty()) {
+            return "n/a";
+        }
+        return incidentDetectedSimTime.entrySet().stream()
+                .min(Comparator.comparingLong(e -> incidentDetectedMs.getOrDefault(e.getKey(), Long.MAX_VALUE)))
+                .map(Map.Entry::getValue)
+                .orElse("n/a");
+    }
+
+    private String lastExtinguishedSimulatedTimestamp() {
+        if (incidentExtinguishedSimTime.isEmpty()) {
+            return "n/a";
+        }
+        return incidentExtinguishedSimTime.entrySet().stream()
+                .max(Comparator.comparingLong(e -> incidentExtinguishedMs.getOrDefault(e.getKey(), Long.MIN_VALUE)))
+                .map(Map.Entry::getValue)
+                .orElse("n/a");
     }
 
     private String eventKey(Event event) {

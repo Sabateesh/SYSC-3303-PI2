@@ -298,6 +298,11 @@ public class Drone implements Runnable {
                     case idle:
                         event = droneSubsystem.requestTask(droneName);
                         if (event == null) {
+                            if (droneSubsystem.isSimulationEnded()) {
+                                System.out.println(ts() + " [" + droneName + "] Simulation complete signal received; stopping task requests");
+                                running = false;
+                                break;
+                            }
                             sendStatus();
                             Thread.sleep(250);
                             break;
