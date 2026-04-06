@@ -924,7 +924,7 @@ public class Scheduler implements Runnable {
 
     private void writeMetricsReport(String body) {
         try {
-            String fileName = "simulation_metrics_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + ".txt";
+            String fileName = "simulation_metrics_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + ".log";
             Path output = Paths.get("SYSC3303-Project-Group5", fileName);
             Files.writeString(output, body, java.nio.charset.StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);

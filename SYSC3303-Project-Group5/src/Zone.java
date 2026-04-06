@@ -23,7 +23,7 @@ public class Zone {
                 if (first) { first = false; continue; }
                 line = line.trim();
                 if (line.isEmpty()) continue;
-                String cleaned = line.replace("(", "").replace(")", "");
+                String cleaned = line.replace("(", "").replace(")", "").replace(";", ",");
                 String[] parts = cleaned.split(",");
                 if (parts.length < 5) continue;
                 zones.add(new Zone(
