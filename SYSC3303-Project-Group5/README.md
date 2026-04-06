@@ -30,5 +30,5 @@
 ## Responsibilities
 - Added simulation metrics recording, Fixed fault detection for nozzle jam and stuck mid-flight, fault info displayed on GUI, drone real-time location (Faraaz, 101298165)
 - Timing diagrams (Aymen, 101326354)
-- INSERT INFO (Ibrahim)
+- Timing diagrams (Ibrahim)
 - Fixed Faults and Completed Final Report (Sabateesh, 101259947)
