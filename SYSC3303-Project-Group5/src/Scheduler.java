@@ -131,16 +131,16 @@ public class Scheduler implements Runnable {
         }
 
         String sourceDroneId = extractDroneId(msg);
-        
+
         detectSequenceGapsFromDrone(msg, sourceDroneId);
-        
+
         clearPendingResend(msg, sourceDroneId);
 
         if (sourceDroneId != null && !processedDroneMessages.add(msg.getMessageId())
                 && (msg.getType() == Message.Type.REQUEST_TASK
-                    || msg.getType() == Message.Type.DONE
-                    || msg.getType() == Message.Type.PARTIAL_DONE
-                    || msg.getType() == Message.Type.DRONE_STATUS)) {
+                || msg.getType() == Message.Type.DONE
+                || msg.getType() == Message.Type.PARTIAL_DONE
+                || msg.getType() == Message.Type.DRONE_STATUS)) {
             return;
         }
 
@@ -866,6 +866,25 @@ public class Scheduler implements Runnable {
         sb.append("- Time from first incident to last extinguished: ").append(formatDuration(totalFireWindowMs)).append("\n");
         sb.append("- Total dispatch distance: ").append(String.format(Locale.US, "%.2f", totalDispatchDistance)).append("\n\n");
 
+        List<Long> responseTimes = computeResponseTimes();
+        long avgResponseMs = averageLong(responseTimes);
+        long maxResponseMs = maxLong(responseTimes);
+        long avgCompletionMs = averageLong(incidentLatencyMs.values());
+        long maxCompletionMs = maxLong(incidentLatencyMs.values());
+
+        sb.append("Required Metrics\n");
+        sb.append("- Average Event Response Time: ").append(formatDuration(avgResponseMs)).append("\n");
+        sb.append("- Maximum Event Response Time: ").append(formatDuration(maxResponseMs)).append("\n");
+        sb.append("- Average Event Completion Time: ").append(formatDuration(avgCompletionMs)).append("\n");
+        sb.append("- Maximum Event Completion Time: ").append(formatDuration(maxCompletionMs)).append("\n");
+        sb.append("- Drone Utilization:\n");
+        for (String droneId : new TreeSet<>(droneStatuses.keySet())) {
+            long flight = droneFlightMs.getOrDefault(droneId, 0L);
+            double util = totalSimulationMs > 0 ? (flight * 100.0 / totalSimulationMs) : 0;
+            sb.append("    ").append(droneId).append(": ").append(String.format(Locale.US, "%.1f%%", util)).append("\n");
+        }
+        sb.append("\n");
+
         sb.append("Incident Metrics\n");
         List<String> incidentKeys = new ArrayList<>(incidentDetectedMs.keySet());
         Collections.sort(incidentKeys);
@@ -927,8 +946,12 @@ public class Scheduler implements Runnable {
                 ? (lastIncidentExtinguishedMs - firstIncidentDetectedMs) : -1;
 
         long avgLatency = averageLong(incidentLatencyMs.values());
+        long maxLatency = maxLong(incidentLatencyMs.values());
         long avgIdle = averageLong(droneIdleMs.values());
         long avgFlight = averageLong(droneFlightMs.values());
+        List<Long> responseTimes = computeResponseTimes();
+        long avgResponseMs = averageLong(responseTimes);
+        long maxResponseMs = maxLong(responseTimes);
 
         gui.logEvent("=== Simulation Metrics ===");
         gui.logEvent("Incidents extinguished: " + incidentExtinguishedMs.size() + "/" + incidentDetectedMs.size());
@@ -936,7 +959,21 @@ public class Scheduler implements Runnable {
         gui.logEvent("First incident -> last extinguished: " + formatDuration(totalFireWindowMs));
         gui.logEvent("First fire simulated timestamp: " + firstSimulatedTimestamp());
         gui.logEvent("Last fire extinguished simulated timestamp: " + lastExtinguishedSimulatedTimestamp());
-        gui.logEvent("Avg incident detect->extinguish: " + formatDuration(avgLatency));
+        gui.logEvent("--- Required Metrics ---");
+        gui.logEvent("Average Event Response Time: " + formatDuration(avgResponseMs));
+        gui.logEvent("Maximum Event Response Time: " + formatDuration(maxResponseMs));
+        gui.logEvent("Average Event Completion Time: " + formatDuration(avgLatency));
+        gui.logEvent("Maximum Event Completion Time: " + formatDuration(maxLatency));
+        gui.logEvent("--- Drone Utilization ---");
+        for (String droneId : new TreeSet<>(droneStatuses.keySet())) {
+            long flight = droneFlightMs.getOrDefault(droneId, 0L);
+            long idle = droneIdleMs.getOrDefault(droneId, 0L);
+            double util = totalSimulationMs > 0 ? (flight * 100.0 / totalSimulationMs) : 0;
+            gui.logEvent(droneId + " | utilization: " + String.format(Locale.US, "%.1f%%", util)
+                    + " | fires: " + droneFiresExtinguished.getOrDefault(droneId, 0)
+                    + " | water: " + String.format(Locale.US, "%.2fL", droneWaterDropped.getOrDefault(droneId, 0f)));
+        }
+        gui.logEvent("--- Additional ---");
         gui.logEvent("Avg drone idle time: " + formatDuration(avgIdle));
         gui.logEvent("Avg drone flight time: " + formatDuration(avgFlight));
         gui.logEvent("Total dispatch distance: " + String.format(Locale.US, "%.2f", totalDispatchDistance));
@@ -963,6 +1000,31 @@ public class Scheduler implements Runnable {
             count++;
         }
         return count == 0 ? 0 : (total / count);
+    }
+
+    private long maxLong(Collection<Long> values) {
+        if (values == null || values.isEmpty()) {
+            return 0;
+        }
+        long max = Long.MIN_VALUE;
+        for (Long value : values) {
+            if (value != null && value > max) {
+                max = value;
+            }
+        }
+        return max == Long.MIN_VALUE ? 0 : max;
+    }
+
+    private List<Long> computeResponseTimes() {
+        List<Long> responseTimes = new ArrayList<>();
+        for (String key : incidentDetectedMs.keySet()) {
+            long detect = incidentDetectedMs.getOrDefault(key, -1L);
+            long dispatch = incidentFirstDispatchMs.getOrDefault(key, -1L);
+            if (detect >= 0 && dispatch >= detect) {
+                responseTimes.add(dispatch - detect);
+            }
+        }
+        return responseTimes;
     }
 
     private String formatDuration(long millis) {
