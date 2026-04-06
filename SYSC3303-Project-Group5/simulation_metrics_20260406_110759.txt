@@ -1,0 +1,33 @@
+Simulation Metrics Report
+Generated: Mon Apr 06 11:07:59 EDT 2026
+
+Overview
+- Incidents detected: 5
+- Incidents extinguished: 5
+- First fire simulated timestamp: 14:03:15
+- Last fire extinguished simulated timestamp: 15:45:00
+- Total simulation time: 1m 51s 298ms
+- Time from first incident to last extinguished: 1m 41s 880ms
+- Total dispatch distance: 5939.39
+
+Required Metrics
+- Average Event Response Time: 0m 00s 090ms
+- Maximum Event Response Time: 0m 00s 148ms
+- Average Event Completion Time: 0m 27s 284ms
+- Maximum Event Completion Time: 0m 45s 988ms
+- Drone Utilization:
+    Drone-0: 32.3%
+    Drone-1: 41.8%
+    Drone-2: 29.8%
+
+Incident Metrics
+- 14:03:15#3 | first response=0m 00s 120ms | detect->extinguish=0m 32s 070ms | dispatch distance=901.39
+- 14:10:00#7 | first response=0m 00s 148ms | detect->extinguish=0m 45s 988ms | dispatch distance=2136.00
+- 15:20:30#1 | first response=0m 00s 143ms | detect->extinguish=0m 07s 167ms | dispatch distance=390.51
+- 15:45:00#5 | first response=0m 00s 009ms | detect->extinguish=0m 40s 799ms | dispatch distance=1480.71
+- 16:00:15#2 | first response=0m 00s 031ms | detect->extinguish=0m 10s 399ms | dispatch distance=1030.78
+
+Drone Metrics
+- Drone-0 | idle=0m 50s 269ms | flight=0m 35s 907ms | dispatch distance=2322.68 | fires extinguished=3 | water dropped=50.00
+- Drone-1 | idle=0m 54s 685ms | flight=0m 46s 511ms | dispatch distance=2136.00 | fires extinguished=1 | water dropped=20.00
+- Drone-2 | idle=1m 03s 004ms | flight=0m 33s 181ms | dispatch distance=1480.71 | fires extinguished=1 | water dropped=30.00
