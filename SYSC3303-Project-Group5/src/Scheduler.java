@@ -73,7 +73,7 @@ public class Scheduler implements Runnable {
     public Scheduler() throws Exception {
         socket = new DatagramSocket(SCHEDULER_PORT);
         socket.setSoTimeout(250);
-        zones = Zone.loadFromCSV("SYSC3303-Project-Group5/sample_zone_file.csv");
+        zones = Zone.loadFromCSV("SYSC3303-Project-Group5/zone_file.csv");
     }
 
     private void sendMessage(Message msg, int port) throws Exception {
@@ -511,8 +511,8 @@ public class Scheduler implements Runnable {
         long inboundSeq = msg.getSequenceNumber();
         String sequenceKey = sequenceTrackingKey(msg, sourceDroneId);
 
-        // Track one sequence stream for all messages coming from DroneSubsystem process.
-        // Track per-drone sequence streams so one drone's packet gap cannot fault another drone.
+        // DroneSubsystem uses a single process-wide sequence counter shared across all drones.
+        // Track that counter as one stream so normal interleaving does not look like packet loss.
         if (type == Message.Type.REQUEST_TASK
                 || type == Message.Type.DONE
                 || type == Message.Type.PARTIAL_DONE
@@ -600,11 +600,15 @@ public class Scheduler implements Runnable {
     }
 
     private String sequenceTrackingKey(Message msg, String sourceDroneId) {
-        if (sourceDroneId != null && !sourceDroneId.isEmpty()) {
-            return sourceDroneId;
-        }
-        if (msg.getType() == Message.Type.DRONE_STATUS || msg.getType() == Message.Type.COMM_FAILURE) {
-            return extractDroneId(msg);
+        if (msg.getType() == Message.Type.REQUEST_TASK
+                || msg.getType() == Message.Type.DONE
+                || msg.getType() == Message.Type.PARTIAL_DONE
+                || msg.getType() == Message.Type.DRONE_STATUS
+                || msg.getType() == Message.Type.COMM_FAILURE
+                || msg.getType() == Message.Type.RESEND_REQUEST) {
+            // DroneSubsystem uses a single process-wide sequence counter shared across all drones.
+            // Track that counter as one stream so normal interleaving does not look like packet loss.
+            return "DRONE_SUBSYSTEM";
         }
         return sourceDroneId;
     }

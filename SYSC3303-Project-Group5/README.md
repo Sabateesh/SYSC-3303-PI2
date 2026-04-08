@@ -28,7 +28,7 @@
 5. When the simulation has completed, a `.log` file will be generated with the simulation metrics.
 
 ## Responsibilities
-- Added simulation metrics recording, Fixed fault detection for nozzle jam and stuck mid-flight, fault info displayed on GUI, drone real-time location (Faraaz, 101298165)
+- Added simulation metrics recording, Fixed fault detection for nozzle jam and stuck mid-flight, fault info displayed on GUI, drone real-time location, report reflection (Faraaz, 101298165)
 - Timing diagrams (Aymen, 101326354)
 - Timing diagrams (Ibrahim)
 - Fixed Faults and worked on Final Report and added some metrics (Sabateesh, 101259947)

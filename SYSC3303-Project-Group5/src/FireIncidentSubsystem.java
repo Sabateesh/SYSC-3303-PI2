@@ -201,7 +201,7 @@ public class FireIncidentSubsystem implements Runnable {
     }
 
     public static void main(String[] args) throws Exception {
-        String eventPath = "SYSC3303-Project-Group5/Sample_event_file.csv";
+        String eventPath = "SYSC3303-Project-Group5/event_file.csv";
         FireIncidentSubsystem fire = new FireIncidentSubsystem(eventPath);
         new Thread(fire).start();
     }

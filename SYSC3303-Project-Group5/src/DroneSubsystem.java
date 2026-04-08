@@ -36,7 +36,7 @@ public class DroneSubsystem implements Runnable {
     public DroneSubsystem() throws Exception {
         socket = new DatagramSocket(DRONE_PORT);
         socket.setSoTimeout(250);
-        zones = Zone.loadFromCSV("SYSC3303-Project-Group5/sample_zone_file.csv");
+        zones = Zone.loadFromCSV("SYSC3303-Project-Group5/zone_file.csv");
         droneThreads = new ArrayList<>();
         initializeDrones();
     }
